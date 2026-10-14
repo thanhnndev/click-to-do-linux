@@ -20,6 +20,10 @@ dependencies = [
     "requests>=2.34.2",
 ]
 
+[project.urls]
+Homepage = "https://github.com/thanhnndev/click-to-do-linux"
+Issues = "https://github.com/thanhnndev/click-to-do-linux/issues"
+
 [project.scripts]
 click-to-do = "click_to_do_linux:main"
 click-to-do-linux = "click_to_do_linux:main"

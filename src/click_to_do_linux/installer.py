@@ -4,25 +4,38 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from .ui.icons import get_svg_xml
 
 
 def get_executable_path() -> str:
-    """Finds or links click-to-do binary into ~/.local/bin/click-to-do."""
+    """Resolves the click-to-do executable and exposes it as ~/.local/bin/click-to-do when needed."""
     local_bin = Path.home() / ".local" / "bin"
-    local_bin.mkdir(parents=True, exist_ok=True)
     target_bin = local_bin / "click-to-do"
 
-    venv_bin = Path.cwd() / ".venv" / "bin" / "click-to-do"
-    if venv_bin.exists():
-        if target_bin.exists() or target_bin.is_symlink():
-            target_bin.unlink()
-        target_bin.symlink_to(venv_bin)
-        return str(target_bin)
+    # Installed entry point (uv tool / pipx / pip / distro package) wins.
+    found = shutil.which("click-to-do")
+    if found:
+        return found
 
-    which_bin = shutil.which("click-to-do")
-    return which_bin or str(venv_bin)
+    # Running from a source checkout's venv: link its entry point.
+    candidates = [Path(sys.argv[0]).resolve(), Path(sys.executable).parent / "click-to-do",
+                  Path.cwd() / ".venv" / "bin" / "click-to-do"]
+    for c in candidates:
+        if c.name.startswith("click-to-do") and c.exists():
+            local_bin.mkdir(parents=True, exist_ok=True)
+            if target_bin.exists() or target_bin.is_symlink():
+                target_bin.unlink()
+            target_bin.symlink_to(c)
+            return str(target_bin)
+    return str(target_bin)
+
+
+def get_assets_dir() -> Path:
+    """Icons shipped inside the package (works for wheels); falls back to the repo's assets/."""
+    pkg = Path(__file__).resolve().parent / "assets"
+    return pkg if pkg.exists() else Path(__file__).resolve().parent.parent.parent / "assets"
 
 
 def install_system_integration() -> tuple[bool, str]:
@@ -32,7 +45,7 @@ def install_system_integration() -> tuple[bool, str]:
 
         # 1. Install Scalable SVG Icon & PNG Icons across all standard resolutions
         hicolor_dir = Path.home() / ".local" / "share" / "icons" / "hicolor"
-        assets_dir = Path(__file__).resolve().parent.parent.parent / "assets"
+        assets_dir = get_assets_dir()
 
         # Scalable SVG
         scalable_dir = hicolor_dir / "scalable" / "apps"
@@ -207,7 +220,9 @@ def uninstall_system_integration(purge_data: bool = False) -> tuple[bool, str]:
             targets.append(home / ".local" / "share" / "icons" / "hicolor" / f"{sz}x{sz}" / "apps" / "click-to-do.png")
 
         bin_link = home / ".local" / "bin" / "click-to-do"
-        if bin_link.is_symlink():  # only remove our own symlink, never a real file
+        # Only remove a symlink we created for a source checkout; uv/pipx-managed entry
+        # points are removed with `uv tool uninstall click-to-do-linux`.
+        if bin_link.is_symlink() and "/uv/tools/" not in str(bin_link.resolve()) and "/pipx/" not in str(bin_link.resolve()):
             targets.append(bin_link)
 
         for p in targets:

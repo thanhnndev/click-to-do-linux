@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="none">
+  <defs>
+    <linearGradient id="cyanPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Open Focus Frame Corners (No border box) -->
+  <g stroke="url(#cyanPurple)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 18 42 L 18 26 A 8 8 0 0 1 26 18 L 42 18" />
+    <path d="M 86 18 L 102 18 A 8 8 0 0 1 110 26 L 110 42" />
+    <path d="M 18 86 L 18 102 A 8 8 0 0 0 26 110 L 42 110" />
+    <path d="M 86 110 L 102 110 A 8 8 0 0 0 110 102 L 110 86" />
+  </g>
+
+  <!-- Central Intelligence AI Sparkles -->
+  <!-- Top Left Sparkle -->
+  <path d="M 42 30 L 45 42 L 57 45 L 45 48 L 42 60 L 39 48 L 27 45 L 39 42 Z" fill="url(#cyanPurple)" />
+  <!-- Top Right Sparkle -->
+  <path d="M 84 32 L 85.5 37.5 L 91 39 L 85.5 40.5 L 84 46 L 82.5 40.5 L 77 39 L 82.5 37.5 Z" fill="#38bdf8" />
+  <!-- Small Ambient Sparkle -->
+  <path d="M 34 76 L 35 79.5 L 38.5 80.5 L 35 81.5 L 34 85 L 33 81.5 L 29.5 80.5 L 33 79.5 Z" fill="#a855f7" />
+
+  <!-- Modern Click Cursor pointing towards center -->
+  <path d="M 60 52 L 96 70 L 80 76 L 94 100 L 82 106 L 68 82 L 56 94 Z" 
+        fill="url(#cyanPurple)" 
+        stroke="#ffffff" 
+        stroke-width="3" 
+        stroke-linejoin="round" 
+        stroke-linecap="round" />
+</svg>
