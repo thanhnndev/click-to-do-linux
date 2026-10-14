@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Click to Do Settings
+GenericName=Settings & Local AI Model Manager
+Comment=Configure Click to Do overlay, shortcuts, local AI models and preferences
+Exec=click-to-do settings
+Icon=click-to-do
+Terminal=false
+StartupWMClass=click-to-do-settings
+Categories=Utility;Settings;

@@ -1,0 +1,12 @@
+[Unit]
+Description=Click to Do Linux Resident Daemon & Bar Tray
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/click-to-do daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

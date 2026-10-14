@@ -66,7 +66,8 @@ class OCREngine:
     _instance: Optional["OCREngine"] = None
 
     def __init__(self):
-        from rapidocr_onnxruntime import RapidOCR
+        from rapidocr import RapidOCR
+
         self.engine = RapidOCR()
 
     @classmethod
@@ -104,8 +105,9 @@ class OCREngine:
 
     def _detect_hybrid(self, image: Image.Image, img_np: np.ndarray):
         """RapidOCR finds text lines; Tesseract reads them. Returns [(pts, text, conf)] or None."""
-        det, _ = self.engine(img_np, use_det=True, use_cls=False, use_rec=False)
-        if not det:
+        out = self.engine(img_np, use_det=True, use_cls=False, use_rec=False)
+        det = out.boxes
+        if det is None or len(det) == 0:
             return []
         crops = []
         for pts in det:
@@ -132,7 +134,10 @@ class OCREngine:
                 except Exception as e:
                     print(f"[OCREngine] Tesseract path failed, falling back to RapidOCR: {e}")
             if results is None:
-                results, _ = self.engine(img_np)
+                out = self.engine(img_np, use_det=True, use_cls=False, use_rec=True)
+                if out.boxes is None or out.txts is None:
+                    return []
+                results = list(zip(out.boxes.tolist(), out.txts, out.scores))
             if not results:
                 return []
 

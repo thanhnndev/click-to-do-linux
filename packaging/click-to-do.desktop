@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Click to Do
+GenericName=Screen Intelligence Overlay
+Comment=Instant OCR, cutout and local AI screen overlay
+Exec=click-to-do capture
+Icon=click-to-do
+Terminal=false
+StartupWMClass=click-to-do-overlay
+Categories=Utility;Graphics;
+Actions=Settings;
+
+[Desktop Action Settings]
+Name=Settings & Local Models
+Exec=click-to-do settings

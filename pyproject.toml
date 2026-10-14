@@ -15,7 +15,8 @@ dependencies = [
     "opencv-python-headless>=5.0.0.93",
     "pillow>=12.3.0",
     "pyqt6>=6.11.0",
-    "rapidocr-onnxruntime>=1.4.4",
+    "onnxruntime>=1.20",
+    "rapidocr>=3.9.2",
     "rembg>=2.0.85",
     "requests>=2.34.2",
 ]
@@ -29,5 +30,5 @@ click-to-do = "click_to_do_linux:main"
 click-to-do-linux = "click_to_do_linux:main"
 
 [build-system]
-requires = ["uv_build>=0.12.8,<0.13.0"]
+requires = ["uv_build>=0.12.8,<0.14.0"]
 build-backend = "uv_build"

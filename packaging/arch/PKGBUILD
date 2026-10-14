@@ -1,0 +1,68 @@
+# Maintainer: thanhnndev <thanhnn16.work@gmail.com>
+pkgname=click-to-do-linux-git
+_pkgname=click-to-do-linux
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc='Windows 11 "Click to Do" for Wayland: instant OCR (Vietnamese-accurate), cutout, color picker and local LLM actions'
+arch=('any')
+url='https://github.com/thanhnndev/click-to-do-linux'
+license=('GPL-3.0-or-later')
+depends=(
+  'python'
+  'python-pyqt6'
+  'python-numpy'
+  'python-pillow'
+  'python-opencv'
+  'python-requests'
+  'python-onnxruntime'
+  'python-rapidocr'      # AUR
+  'python-rembg'         # AUR
+  'grim'
+  'wl-clipboard'
+  'tesseract'
+  'tesseract-data-vie'
+  'tesseract-data-eng'
+)
+makedepends=('git' 'uv' 'python-installer')
+optdepends=(
+  'ollama: local LLM for Translate / Explain / Summarize / Ask'
+  'libnotify: desktop notifications'
+)
+provides=("${_pkgname}")
+conflicts=("${_pkgname}")
+install=click-to-do-linux-git.install
+source=("git+${url}.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "${srcdir}/${_pkgname}"
+  local ver
+  ver=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+  printf '%s.r%s.g%s' "$ver" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "${srcdir}/${_pkgname}"
+  # uv ships the uv_build backend, so no network / isolated env is needed
+  uv build --wheel --no-build-isolation --out-dir "${srcdir}/dist" . 2>/dev/null \
+    || uv build --wheel --out-dir "${srcdir}/dist" .
+}
+
+package() {
+  cd "${srcdir}/${_pkgname}"
+  python -m installer --destdir="${pkgdir}" "${srcdir}"/dist/*.whl
+
+  install -Dm644 packaging/click-to-do.desktop          "${pkgdir}/usr/share/applications/click-to-do.desktop"
+  install -Dm644 packaging/click-to-do-settings.desktop "${pkgdir}/usr/share/applications/click-to-do-settings.desktop"
+  install -Dm644 packaging/click-to-do.service          "${pkgdir}/usr/lib/systemd/user/click-to-do.service"
+
+  install -Dm644 assets/icon.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/click-to-do.svg"
+  local sz
+  for sz in 32 48 64 128 256 512; do
+    install -Dm644 "assets/icon-${sz}.png" "${pkgdir}/usr/share/icons/hicolor/${sz}x${sz}/apps/click-to-do.png"
+  done
+
+  install -Dm644 LICENSE    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 CREDITS.md "${pkgdir}/usr/share/doc/${_pkgname}/CREDITS.md"
+  install -Dm644 README.md  "${pkgdir}/usr/share/doc/${_pkgname}/README.md"
+}

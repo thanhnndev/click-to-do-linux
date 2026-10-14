@@ -1,0 +1,13 @@
+post_install() {
+  gtk-update-icon-cache -q -t -f usr/share/icons/hicolor 2>/dev/null || true
+  cat <<'MSG'
+==> Click to Do installed.
+    systemctl --user enable --now click-to-do.service   # start the resident daemon + bar icon
+    click-to-do settings                                # shortcuts tab binds keys for Niri/Umbriel/Hyprland/Sway/...
+    ollama pull qwen3:4b                                # recommended local model for Vietnamese
+MSG
+}
+post_upgrade() { post_install; }
+post_remove() {
+  gtk-update-icon-cache -q -t -f usr/share/icons/hicolor 2>/dev/null || true
+}
