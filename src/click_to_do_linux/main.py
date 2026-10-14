@@ -63,7 +63,7 @@ def main():
     parser = argparse.ArgumentParser(description="Click to Do Linux — Screen Intelligence Overlay")
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("capture", help="Trigger instant screen overlay")
+    subparsers.add_parser("capture", help="Trigger the screen overlay")
     subparsers.add_parser("color", help="Trigger screen HEX color picker")
     subparsers.add_parser("daemon", help="Run resident background daemon & bar tray icon")
     subparsers.add_parser("settings", help="Open settings and local AI model manager")

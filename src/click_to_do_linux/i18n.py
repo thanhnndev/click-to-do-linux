@@ -49,7 +49,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Screen intelligence overlay, local models, and desktop bar integration",
     },
     "card_cutout": {"vi": "MÔ HÌNH TÁCH NỀN (ONNX)", "en": "SUBJECT CUTOUT ENGINE (ONNX)"},
-    "cutout_fast": {"vi": "u2netp  —  Siêu nhanh (~4,7 MB, <50ms)", "en": "u2netp  —  Ultra-fast (~4.7 MB, <50ms latency)"},
+    "cutout_fast": {"vi": "u2netp  —  Nhỏ & nhanh nhất (~4,7 MB)", "en": "u2netp  —  Smallest & fastest (~4.7 MB)"},
     "cutout_precise": {
         "vi": "isnet-general-use  —  Chính xác cao (~170 MB, viền mịn)",
         "en": "isnet-general-use  —  High precision (~170 MB, fine edges)",

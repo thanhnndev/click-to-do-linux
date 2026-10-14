@@ -12,18 +12,18 @@
   <img src="assets/demo.gif" alt="Click to Do for Linux — demo flow" width="100%" />
 </p>
 
-Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze the screen in **< 25ms**, detect text and QR codes in the background, isolate subjects (AI Cutout), redact sensitive areas, and run local Vietnamese/English LLMs via Ollama with diacritic-accurate Vietnamese OCR.
+Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze the screen, detect text and QR codes in the background, isolate subjects (AI Cutout), redact sensitive areas, and run local Vietnamese/English LLMs via Ollama with diacritic-accurate Vietnamese OCR.
 
 ---
 
 ## Key Features
 
-- **Instant Screen Freeze (< 25ms):** Streams uncompressed framebuffers directly from `grim` into RAM (`QImage` / `PIL.Image`) with zero temporary disk writes and zero PNG encoding overhead.
+- **Fast Screen Freeze:** Streams uncompressed framebuffers directly from `grim` into RAM (`QImage` / `PIL.Image`) with zero temporary disk writes and zero PNG encoding overhead.
 - **HiDPI & Multi-Monitor Native:** Automatically maps physical framebuffer pixels to logical Wayland coordinates (1.0x, 1.5x, 2.0x fractional scaling) without offset or blurriness.
 - **Zero-Scroll Overlay on Niri:** Uses stationary `(0, 0)` floating window rules so activating the overlay never shifts or scrolls Niri tiling columns.
 - **Direct Point-and-Click Text Interaction:**
   - **Single-click** any text line to open the contextual action pill (`Copy`, `Translate`, `Explain`, `Ask AI`, `Search`).
-  - **Double-click** any text line to immediately copy and exit in 0.5s.
+  - **Double-click** any text line to immediately copy and exit.
   - **`Shift + Click`** multiple lines to merge non-contiguous text blocks.
   - **Live Screen Find (`Ctrl + F`):** Highlight matching text anywhere on screen in real time.
 - **Image & Subject Intelligence (Drag Selection):**
@@ -97,7 +97,7 @@ Sizes are Ollama default downloads (q4_K_M). "Vietnamese" is a qualitative ratin
 
 | Model (`ollama pull …`) | Size | VRAM/RAM | Vietnamese | Best for | License |
 | :--- | ---: | ---: | :---: | :--- | :--- |
-| `qwen3:1.7b` | 1.4 GB | ~2 GB | ★★☆ | Old laptops, CPU-only, instant replies | Apache-2.0 |
+| `qwen3:1.7b` | 1.4 GB | ~2 GB | ★★☆ | Old laptops, CPU-only, fastest replies | Apache-2.0 |
 | `sailor2:1b` | 1.1 GB | ~2 GB | ★★★ | Tiny model tuned for SE-Asian languages | Apache-2.0 |
 | `qwen2.5:3b` | 1.9 GB | ~3 GB | ★★★ | Fast streaming, solid everyday default | Qwen Research |
 | **`qwen3:4b`** | 2.5 GB | ~4 GB | ★★★★ | **Best balance** — translate / summarize / explain | Apache-2.0 |
@@ -113,7 +113,7 @@ Cutout models (ONNX, via `rembg`):
 
 | Model | Size | Notes |
 | :--- | ---: | :--- |
-| `u2netp` | 4.7 MB | Instant subject isolation (< 50 ms) |
+| `u2netp` | 4.7 MB | Smallest and fastest; rougher edges |
 | `isnet-general-use` | 170 MB | High-precision edges |
 
 ---
@@ -267,7 +267,7 @@ If you also want a dedicated custom button module (e.g. in **Waybar** or **Umbri
 
 | Command | Description |
 | --- | --- |
-| `click-to-do capture` | Freeze screen and open interactive overlay (< 25ms via daemon) |
+| `click-to-do capture` | Freeze screen and open interactive overlay (via the resident daemon) |
 | `click-to-do color` | Open overlay directly in HEX Color Picker loupe mode |
 | `click-to-do settings` | Open minimalist Settings & Local Model Manager GUI |
 | `click-to-do daemon` | Start background resident daemon and universal bar icon |

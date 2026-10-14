@@ -23,7 +23,7 @@ APP_ID = "click-to-do-overlay"
 
 
 class ClickToDoDaemon:
-    """Resident daemon providing 0ms overlay trigger and universal bar Quick Action icon."""
+    """Resident daemon keeping models warm for the overlay trigger and universal bar Quick Action icon."""
 
     def __init__(self):
         QGuiApplication.setDesktopFileName(APP_ID)
