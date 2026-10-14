@@ -14,6 +14,8 @@ class Config:
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:3b"
     target_language: str = "vi"
+    # UI language: "auto" (follow system locale), "vi" or "en"
+    ui_language: str = "auto"
     search_engine: str = "google"
     auto_detect_qr: bool = True
     save_directory: str = str(Path.home() / "Pictures" / "ClickToDo")

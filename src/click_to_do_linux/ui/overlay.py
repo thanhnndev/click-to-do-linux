@@ -28,6 +28,7 @@ from ..config import Config, load_config
 from ..utils.clipboard import ClipboardManager
 from .action_bar import ActionBar
 from .ai_dialog import AIDialog
+from ..i18n import t
 from .icons import get_icon
 from .theme import GLASS_STYLE
 
@@ -138,13 +139,13 @@ class OverlayWindow(QWidget):
 
         self.search_input = QLineEdit(self.top_bar)
         self.search_input.setObjectName("QuickInput")
-        self.search_input.setPlaceholderText("Find text on screen (Ctrl+F)...")
+        self.search_input.setPlaceholderText(t("find_placeholder"))
         self.search_input.setFixedWidth(220)
         self.search_input.textChanged.connect(self._on_search_changed)
         top_layout.addWidget(self.search_input)
 
         self.color_btn = QToolButton(self.top_bar)
-        self.color_btn.setText(" Pick Color")
+        self.color_btn.setText(" " + t("pick_color"))
         self.color_btn.setIcon(get_icon("pipette", "#e4e4e7", 14))
         self.color_btn.setIconSize(QSize(14, 14))
         self.color_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -152,7 +153,7 @@ class OverlayWindow(QWidget):
         top_layout.addWidget(self.color_btn)
 
         self.copy_all_btn = QToolButton(self.top_bar)
-        self.copy_all_btn.setText(" Copy All Text")
+        self.copy_all_btn.setText(" " + t("copy_all"))
         self.copy_all_btn.setIcon(get_icon("text", "#e4e4e7", 14))
         self.copy_all_btn.setIconSize(QSize(14, 14))
         self.copy_all_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -559,15 +560,15 @@ class OverlayWindow(QWidget):
             llm = LLMService(host=self.config.ollama_host, model=self.config.ollama_model)
             if action_name == "ai_custom":
                 ctx_text, question = payload
-                title = f"AI: {question[:28]}"
+                title = f"{t('ai_ask_title')}: {question[:28]}"
                 gen = lambda: llm.custom_ask(ctx_text, question, lang=self.config.target_language)
             else:
                 text = str(payload)
                 tasks = {
-                    "ai_summarize": ("Summarize", lambda: llm.summarize(text, lang=self.config.target_language)),
-                    "ai_explain": ("Explain", lambda: llm.explain(text, lang=self.config.target_language)),
-                    "ai_translate": ("Translate", lambda: llm.translate(text, target_lang=self.config.target_language)),
-                    "ai_rewrite": ("Rewrite", lambda: llm.rewrite(text)),
+                    "ai_summarize": (t("summarize"), lambda: llm.summarize(text, lang=self.config.target_language)),
+                    "ai_explain": (t("explain"), lambda: llm.explain(text, lang=self.config.target_language)),
+                    "ai_translate": (t("translate"), lambda: llm.translate(text, target_lang=self.config.target_language)),
+                    "ai_rewrite": (t("rewrite"), lambda: llm.rewrite(text)),
                 }
                 if action_name not in tasks:
                     return

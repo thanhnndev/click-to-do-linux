@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from ..i18n import t
 from .icons import get_icon
 
 
@@ -35,7 +36,7 @@ class ActionBar(QFrame):
         ask_layout.setSpacing(4)
         self.ask_input = QLineEdit(self.ask_row)
         self.ask_input.setObjectName("QuickInput")
-        self.ask_input.setPlaceholderText("Ask AI about selection...")
+        self.ask_input.setPlaceholderText(t("ask_placeholder"))
         self.ask_input.setMinimumWidth(240)
         self.ask_input.returnPressed.connect(self._submit_custom_ask)
         ask_layout.addWidget(self.ask_input)
@@ -81,22 +82,22 @@ class ActionBar(QFrame):
         self._current_text = text
 
         # 1. Copy
-        copy_btn = self._make_btn("Copy", "copy", "PrimaryAction", "#ffffff")
+        copy_btn = self._make_btn(t("copy"), "copy", "PrimaryAction", "#ffffff")
         copy_btn.clicked.connect(lambda: self.action_triggered.emit("copy_text", text))
         self.row_layout.addWidget(copy_btn)
 
         # 2. Direct Translate (1-click most used action)
-        trans_btn = self._make_btn("Translate", "translate", "AiAction", "#38bdf8")
+        trans_btn = self._make_btn(t("translate"), "translate", "AiAction", "#38bdf8")
         trans_btn.clicked.connect(lambda: self.action_triggered.emit("ai_translate", text))
         self.row_layout.addWidget(trans_btn)
 
         # 3. Direct Explain / Summarize
-        exp_btn = self._make_btn("Explain", "sparkles")
+        exp_btn = self._make_btn(t("explain"), "sparkles")
         exp_btn.clicked.connect(lambda: self.action_triggered.emit("ai_explain", text))
         self.row_layout.addWidget(exp_btn)
 
         # 4. Ask AI custom prompt
-        ask_btn = self._make_btn("Ask", "send")
+        ask_btn = self._make_btn(t("ask"), "send")
         ask_btn.clicked.connect(self._toggle_ask_input)
         self.row_layout.addWidget(ask_btn)
 
@@ -104,16 +105,16 @@ class ActionBar(QFrame):
 
         # 5. Smart Entity Actions (URL / Mail / Search)
         if urls:
-            url_btn = self._make_btn("Open Link", "link")
+            url_btn = self._make_btn(t("open_link"), "link")
             url_btn.clicked.connect(lambda: self.action_triggered.emit("open_url", urls[0]))
             self.row_layout.addWidget(url_btn)
 
         if emails:
-            email_btn = self._make_btn("Email", "mail")
+            email_btn = self._make_btn(t("email"), "mail")
             email_btn.clicked.connect(lambda: self.action_triggered.emit("open_email", emails[0]))
             self.row_layout.addWidget(email_btn)
 
-        search_btn = self._make_btn("Search", "search")
+        search_btn = self._make_btn(t("search"), "search")
         search_btn.clicked.connect(lambda: self.action_triggered.emit("search_web", text))
         self.row_layout.addWidget(search_btn)
 
@@ -121,8 +122,8 @@ class ActionBar(QFrame):
         more_btn = QToolButton(self)
         more_btn.setText("▾")
         ai_menu = QMenu(self)
-        ai_menu.addAction("Summarize", lambda: self.action_triggered.emit("ai_summarize", text))
-        ai_menu.addAction("Rewrite / Polish", lambda: self.action_triggered.emit("ai_rewrite", text))
+        ai_menu.addAction(t("summarize"), lambda: self.action_triggered.emit("ai_summarize", text))
+        ai_menu.addAction(t("rewrite"), lambda: self.action_triggered.emit("ai_rewrite", text))
         more_btn.setMenu(ai_menu)
         more_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.row_layout.addWidget(more_btn)
@@ -147,31 +148,31 @@ class ActionBar(QFrame):
     def show_for_image(self, crop_image, text_inside: str = ""):
         self.clear_actions()
 
-        copy_btn = self._make_btn("Copy", "copy", "PrimaryAction", "#ffffff")
+        copy_btn = self._make_btn(t("copy"), "copy", "PrimaryAction", "#ffffff")
         copy_btn.clicked.connect(lambda: self.action_triggered.emit("copy_image", crop_image))
         self.row_layout.addWidget(copy_btn)
 
-        rmbg_btn = self._make_btn("Cutout", "cutout", "AiAction", "#38bdf8")
-        rmbg_btn.clicked.connect(lambda: self._emit_async(rmbg_btn, "Cutting...", "remove_bg", crop_image))
+        rmbg_btn = self._make_btn(t("cutout"), "cutout", "AiAction", "#38bdf8")
+        rmbg_btn.clicked.connect(lambda: self._emit_async(rmbg_btn, t("cutting"), "remove_bg", crop_image))
         self.row_layout.addWidget(rmbg_btn)
 
-        blur_btn = self._make_btn("Blur BG", "blur")
-        blur_btn.clicked.connect(lambda: self._emit_async(blur_btn, "Blurring...", "blur_bg", crop_image))
+        blur_btn = self._make_btn(t("blur_bg"), "blur")
+        blur_btn.clicked.connect(lambda: self._emit_async(blur_btn, t("blurring"), "blur_bg", crop_image))
         self.row_layout.addWidget(blur_btn)
 
-        redact_btn = self._make_btn("Redact", "redact")
+        redact_btn = self._make_btn(t("redact"), "redact")
         redact_btn.clicked.connect(lambda: self.action_triggered.emit("redact_region", crop_image))
         self.row_layout.addWidget(redact_btn)
 
         if text_inside:
             self._add_divider()
-            ocr_btn = self._make_btn("Copy Text", "text")
+            ocr_btn = self._make_btn(t("copy_text"), "text")
             ocr_btn.clicked.connect(lambda: self.action_triggered.emit("copy_text", text_inside))
             self.row_layout.addWidget(ocr_btn)
 
         self._add_divider()
 
-        save_btn = self._make_btn("Save", "save")
+        save_btn = self._make_btn(t("save"), "save")
         save_btn.clicked.connect(lambda: self.action_triggered.emit("save_image", crop_image))
         self.row_layout.addWidget(save_btn)
 
@@ -188,11 +189,11 @@ class ActionBar(QFrame):
     def show_for_qr(self, qr_text: str, is_url: bool):
         self.clear_actions()
         if is_url:
-            open_btn = self._make_btn("Open Link", "link", "PrimaryAction", "#ffffff")
+            open_btn = self._make_btn(t("open_link"), "link", "PrimaryAction", "#ffffff")
             open_btn.clicked.connect(lambda: self.action_triggered.emit("open_url", qr_text))
             self.row_layout.addWidget(open_btn)
 
-        copy_btn = self._make_btn("Copy QR", "copy")
+        copy_btn = self._make_btn(t("copy_qr"), "copy")
         copy_btn.clicked.connect(lambda: self.action_triggered.emit("copy_text", qr_text))
         self.row_layout.addWidget(copy_btn)
 

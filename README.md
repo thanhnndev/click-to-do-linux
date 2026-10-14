@@ -17,7 +17,7 @@
   <em>(Replace <code>assets/demo.gif</code> with your recorded walkthrough / showcase)</em>
 </p>
 
-Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze the screen in **< 25ms**, detect text and QR codes in the background, isolate subjects (AI Cutout), redact sensitive areas, and run local Vietnamese/English LLMs via Ollama.
+Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze the screen in **< 25ms**, detect text and QR codes in the background, isolate subjects (AI Cutout), redact sensitive areas, and run local Vietnamese/English LLMs via Ollama with diacritic-accurate Vietnamese OCR.
 
 ---
 
@@ -47,16 +47,49 @@ Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze 
 
 ---
 
-## Recommended Local AI Models (Vietnamese & English)
+## Vietnamese OCR (Tiếng Việt)
 
-| Task | Model | Size | Highlights |
-| :--- | :--- | :--- | :--- |
-| **LLM (Best Speed/Vietnamese)** | `qwen2.5:3b` | ~1.9 GB | Ultra-fast streaming (>90 tok/s), natural Vietnamese translation & summarization. |
-| **LLM (Code & Reasoning)** | `gemma3:4b` | ~3.1 GB | Strong multilingual comprehension and code explanation. |
-| **LLM (Ultra-Light CPU/iGPU)** | `qwen2.5:1.5b` | ~980 MB | Runs effortlessly on iGPU/CPU with near-zero VRAM footprint. |
-| **LLM (High Accuracy)** | `qwen2.5:7b` | ~4.7 GB | Fits comfortably in 8GB VRAM for polished rewrites and complex queries. |
-| **Subject Cutout (Fast)** | `u2netp` | 4.7 MB | Instant subject isolation (< 50ms). |
-| **Subject Cutout (Detailed)** | `isnet-general-use` | 170 MB | High-precision edge segmentation. |
+Stock PP-OCR models (RapidOCR/PaddleOCR, even the Latin v5 one) silently **drop Vietnamese tone marks** (`Việt Nam` → `Vit Nam`). Click to Do therefore uses a hybrid pipeline:
+
+1. **RapidOCR (ONNX)** locates every text line — fast, language-agnostic.
+2. **Tesseract `vie+eng`** reads each line, keeping full diacritics (`Người đàn ông ấy đang ăn phở bò tái nạm`).
+
+If `tesseract` is not installed the app falls back to RapidOCR (English/Chinese fine, Vietnamese loses diacritics).
+
+```bash
+# Arch / CachyOS            sudo pacman -S tesseract
+# Debian / Ubuntu           sudo apt install tesseract-ocr
+# Fedora                    sudo dnf install tesseract
+```
+
+The compact Vietnamese/English data files (~4.6 MB, `tessdata_fast`) are downloaded automatically to `~/.local/share/click-to-do/tessdata` by **Settings → Download & Warmup Models** — no system language packs required.
+
+---
+
+## Recommended Local Language Models (Ollama)
+
+Sizes are Ollama default downloads (q4_K_M). "Vietnamese" is a qualitative rating from the published benchmarks and model cards we could find (VMLU, translation roundups) — no single benchmark covers all of these, so test on your own text.
+
+| Model (`ollama pull …`) | Size | VRAM/RAM | Vietnamese | Best for | License |
+| :--- | ---: | ---: | :---: | :--- | :--- |
+| `qwen3:1.7b` | 1.4 GB | ~2 GB | ★★☆ | Old laptops, CPU-only, instant replies | Apache-2.0 |
+| `sailor2:1b` | 1.1 GB | ~2 GB | ★★★ | Tiny model tuned for SE-Asian languages | Apache-2.0 |
+| `qwen2.5:3b` | 1.9 GB | ~3 GB | ★★★ | Fast streaming, solid everyday default | Qwen Research |
+| **`qwen3:4b`** | 2.5 GB | ~4 GB | ★★★★ | **Best balance** — translate / summarize / explain | Apache-2.0 |
+| `gemma3:4b` | 3.4 GB | ~5 GB | ★★★★ | Natural phrasing, 128K context | Gemma Terms |
+| `qwen3:8b` | 5.2 GB | ~7 GB | ★★★★★ | High accuracy, 8 GB GPUs | Apache-2.0 |
+| `sailor2:8b` | 5.2 GB | ~7 GB | ★★★★★ | Strongest Vietnamese ≤ 8B (continued pre-training on 15 SEA languages) | Apache-2.0 |
+| `aya-expanse:8b` | 5.1 GB | ~7 GB | ★★★★ | 23-language translation (**non-commercial** license) | CC-BY-NC |
+| `gemma3:12b` | 8.2 GB | ~10 GB | ★★★★★ | Best quality on 12 GB GPUs | Gemma Terms |
+
+> Qwen3 models have a "thinking" mode; Click to Do disables it (`think: false`) so output streams immediately.
+
+Cutout models (ONNX, via `rembg`):
+
+| Model | Size | Notes |
+| :--- | ---: | :--- |
+| `u2netp` | 4.7 MB | Instant subject isolation (< 50 ms) |
+| `isnet-general-use` | 170 MB | High-precision edges |
 
 ---
 
@@ -86,6 +119,20 @@ click-to-do settings
 ```
 
 Select your preferred Cutout engine and Ollama model, then click **Download & Warmup Models**.
+The UI language (Tiếng Việt / English / auto) can be changed in the same window.
+
+### 3. Uninstall (Gỡ cài đặt)
+
+From the GUI: **Settings → Uninstall…** (optionally tick *also delete config and downloaded data*).
+
+From the terminal:
+
+```bash
+click-to-do uninstall            # remove service, launchers, icons, Niri rule
+click-to-do uninstall --purge    # ...and delete ~/.config/click-to-do + downloaded Tesseract data
+```
+
+Models pulled with Ollama are left untouched; remove them with `ollama rm <model>`. Finally, delete the project folder (and `~/.local/bin/click-to-do` is already removed if it was our symlink).
 
 ---
 
@@ -136,5 +183,18 @@ If you also want a dedicated custom button module (e.g. in **Waybar** or **Umbri
 | `click-to-do settings` | Open minimalist Settings & Local Model Manager GUI |
 | `click-to-do daemon` | Start background resident daemon and universal bar icon |
 | `click-to-do install` | Install desktop app, icon, and systemd user service |
+| `click-to-do uninstall [--purge]` | Remove desktop app, icon, service and Niri rule (optionally config/data) |
 | `click-to-do bar-status` | Print JSON status for custom bar modules |
 | `click-to-do stop` | Stop the running background daemon |
+
+---
+
+## License
+
+Released under the **[GNU General Public License v3.0 or later](LICENSE)** (required by the PyQt6 GPL dependency).
+
+## Credits
+
+Built on RapidOCR / PaddleOCR, Tesseract, rembg (U²-Net, IS-Net), Ollama and PyQt6 — see [CREDITS.md](CREDITS.md) for the full list and licenses.
+
+*Not affiliated with Microsoft. "Click to Do" is a Windows 11 feature name used descriptively.*

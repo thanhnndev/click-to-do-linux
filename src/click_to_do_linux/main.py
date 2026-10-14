@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import QApplication
 from .capture.screen import ScreenCapture
 from .config import load_config
 from .daemon import APP_ID, ClickToDoDaemon, print_bar_status_json, send_command_to_daemon
-from .installer import install_system_integration
+from .installer import install_system_integration, uninstall_system_integration
 from .ui.icons import get_icon
 from .ui.overlay import OverlayWindow
 from .ui.setup_window import SetupWindow
@@ -68,6 +68,8 @@ def main():
     subparsers.add_parser("daemon", help="Run resident background daemon & bar tray icon")
     subparsers.add_parser("settings", help="Open settings and local AI model manager")
     subparsers.add_parser("install", help="Build and install desktop app, icon, and systemd service")
+    uninstall_p = subparsers.add_parser("uninstall", help="Remove desktop app, icon, and systemd service")
+    uninstall_p.add_argument("--purge", action="store_true", help="Also delete config and downloaded data")
     subparsers.add_parser("bar-status", help="Output JSON status for custom Waybar/Umbriel modules")
     subparsers.add_parser("stop", help="Stop background daemon")
 
@@ -81,6 +83,10 @@ def main():
         run_settings()
     elif args.command == "install":
         ok, msg = install_system_integration()
+        print(msg)
+        sys.exit(0 if ok else 1)
+    elif args.command == "uninstall":
+        ok, msg = uninstall_system_integration(purge_data=args.purge)
         print(msg)
         sys.exit(0 if ok else 1)
     elif args.command == "bar-status":

@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from ..utils.clipboard import ClipboardManager
+from ..i18n import t
 from .icons import get_icon
 
 
@@ -50,7 +51,7 @@ class AIDialog(QFrame):
         header.addWidget(self.title_label)
         header.addStretch()
 
-        self.status_label = QLabel("Generating...")
+        self.status_label = QLabel(t("generating"))
         self.status_label.setStyleSheet("color: #71717a; font-size: 11px;")
         header.addWidget(self.status_label)
 
@@ -66,7 +67,7 @@ class AIDialog(QFrame):
         self.layout.addWidget(self.text_browser)
 
         footer = QHBoxLayout()
-        self.copy_btn = QPushButton(" Copy")
+        self.copy_btn = QPushButton(" " + t("copy"))
         self.copy_btn.setIcon(get_icon("copy", "#ffffff", 13))
         self.copy_btn.setStyleSheet("""
             QPushButton {
@@ -97,15 +98,15 @@ class AIDialog(QFrame):
         self.text_browser.moveCursor(self.text_browser.textCursor().MoveOperation.End)
 
     def _on_finished(self):
-        self.status_label.setText("Done")
+        self.status_label.setText(t("done"))
 
     def _on_error(self, err: str):
-        self.status_label.setText("Error")
+        self.status_label.setText(t("error"))
         self.text_browser.insertPlainText(f"\n[Error: {err}]")
 
     def _copy_result(self):
         text = self.text_browser.toPlainText()
         if text:
             ClipboardManager.copy_text(text)
-            self.copy_btn.setText(" Copied")
+            self.copy_btn.setText(" " + t("copied"))
             self.copy_btn.setIcon(get_icon("check", "#4ade80", 13))

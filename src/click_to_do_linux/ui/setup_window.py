@@ -18,16 +18,22 @@ from PyQt6.QtWidgets import (
 )
 
 from ..ai.llm import LLMService
-from ..ai.ocr import OCREngine
+from ..ai.ocr import OCREngine, download_tessdata, tesseract_ready
+from ..i18n import set_lang, t
 from ..ai.segmentation import SegmentationEngine
 from ..config import Config, get_config_dir, load_config, save_config
 from .icons import get_icon
 
+# (ollama tag, display label). Sizes are Ollama q4_K_M downloads; see README for the full table.
 RECOMMENDED_VI_MODELS = [
-    ("qwen2.5:3b", "Qwen 2.5 3B  —  Fastest & Best Vietnamese (1.9 GB)"),
-    ("gemma3:4b", "Gemma 3 4B  —  Strong Vietnamese & Code Analysis (3.1 GB)"),
-    ("qwen2.5:1.5b", "Qwen 2.5 1.5B  —  Ultra-light CPU/iGPU Instant (980 MB)"),
-    ("qwen2.5:7b", "Qwen 2.5 7B  —  High-Accuracy Translation & Rewrite (4.7 GB)"),
+    ("qwen3:4b", "Qwen3 4B  —  Cân bằng nhất / Best balance (2.5 GB)"),
+    ("qwen2.5:3b", "Qwen2.5 3B  —  Nhanh, nhẹ / Fast & light (1.9 GB)"),
+    ("gemma3:4b", "Gemma3 4B  —  Văn phong tự nhiên / Natural phrasing (3.4 GB)"),
+    ("qwen3:1.7b", "Qwen3 1.7B  —  Siêu nhẹ CPU / Ultra-light CPU (1.4 GB)"),
+    ("sailor2:1b", "Sailor2 1B  —  Tối ưu Đông Nam Á / SEA-tuned (1.1 GB)"),
+    ("qwen3:8b", "Qwen3 8B  —  Chính xác cao / High accuracy (5.2 GB)"),
+    ("sailor2:8b", "Sailor2 8B  —  Tiếng Việt tốt nhất ≤ 8B / Best ≤ 8B Vietnamese (5.2 GB)"),
+    ("gemma3:12b", "Gemma3 12B  —  Chất lượng cao / High quality (8.2 GB)"),
 ]
 
 
@@ -42,18 +48,25 @@ class ModelWarmupWorker(QThread):
 
     def run(self):
         try:
-            self.progress.emit("Initializing RapidOCR (PP-OCRv4 ONNX)...", 25)
+            self.progress.emit(t("warm_ocr"), 15)
             OCREngine.warmup()
 
-            self.progress.emit(f"Loading Cutout Engine ({self.bg_model})...", 60)
+            if shutil.which("tesseract"):
+                if not tesseract_ready():
+                    self.progress.emit(t("warm_tess"), 35)
+                    download_tessdata()
+            else:
+                self.progress.emit(t("warm_no_tess"), 35)
+
+            self.progress.emit(t("warm_cutout", m=self.bg_model), 60)
             SegmentationEngine.get_session(self.bg_model)
 
             if self.pull_ollama_model and shutil.which("ollama"):
-                self.progress.emit(f"Pulling Ollama model '{self.pull_ollama_model}'...", 80)
+                self.progress.emit(t("warm_pull", m=self.pull_ollama_model), 80)
                 subprocess.run(["ollama", "pull", self.pull_ollama_model], check=False)
 
-            self.progress.emit("Ready", 100)
-            self.finished.emit(True, "All local models initialized and cached.")
+            self.progress.emit(t("warm_ready"), 100)
+            self.finished.emit(True, t("warm_done"))
         except Exception as e:
             self.finished.emit(False, str(e))
 
@@ -62,8 +75,9 @@ class SetupWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.config: Config = load_config()
-        self.setWindowTitle("Click to Do — Settings")
-        self.setFixedSize(580, 620)
+        set_lang(self.config.ui_language)
+        self.setWindowTitle(t("set_title"))
+        self.setFixedSize(600, 700)
 
         arrow_path = get_config_dir() / "chevron-down.svg"
         if not arrow_path.exists():
@@ -185,6 +199,17 @@ class SetupWindow(QWidget):
                 color: #ffffff;
                 border: 1px solid #3f3f46;
             }}
+            QPushButton#Danger {{
+                background-color: #18181b;
+                color: #f87171;
+                border: 1px solid #3f1d1d;
+                font-weight: 500;
+                min-height: 22px;
+            }}
+            QPushButton#Danger:hover {{
+                background-color: #2a1212;
+                border: 1px solid #f87171;
+            }}
             QProgressBar {{
                 border: 1px solid #27272a;
                 border-radius: 4px;
@@ -218,7 +243,7 @@ class SetupWindow(QWidget):
         hdr.setSpacing(2)
         title = QLabel("Click to Do")
         title.setObjectName("HeaderTitle")
-        sub = QLabel("Screen intelligence overlay, local models, and desktop bar integration")
+        sub = QLabel(t("set_sub"))
         sub.setObjectName("HeaderSub")
         hdr.addWidget(title)
         hdr.addWidget(sub)
@@ -226,14 +251,14 @@ class SetupWindow(QWidget):
 
         # Card 1: Vision & Cutout Model
         c1, l1 = self._make_card()
-        t1 = QLabel("SUBJECT CUTOUT ENGINE (ONNX)")
+        t1 = QLabel(t("card_cutout"))
         t1.setObjectName("CardTitle")
         l1.addWidget(t1)
 
         self.bg_combo = QComboBox()
         self.bg_combo.setMinimumHeight(32)
-        self.bg_combo.addItem("u2netp  —  Ultra-fast (~4.7 MB, <50ms latency)", "u2netp")
-        self.bg_combo.addItem("isnet-general-use  —  High precision (~170 MB, fine edges)", "isnet-general-use")
+        self.bg_combo.addItem(t("cutout_fast"), "u2netp")
+        self.bg_combo.addItem(t("cutout_precise"), "isnet-general-use")
         idx = self.bg_combo.findData(self.config.bg_removal_model)
         if idx >= 0:
             self.bg_combo.setCurrentIndex(idx)
@@ -242,7 +267,7 @@ class SetupWindow(QWidget):
 
         # Card 2: Vietnamese Local LLM (Ollama)
         c2, l2 = self._make_card()
-        t2 = QLabel("LOCAL LANGUAGE MODEL (VIETNAMESE / ENGLISH)")
+        t2 = QLabel(t("card_llm"))
         t2.setObjectName("CardTitle")
         l2.addWidget(t2)
 
@@ -252,7 +277,7 @@ class SetupWindow(QWidget):
         self.ollama_combo.setMinimumHeight(32)
         row_llm.addWidget(self.ollama_combo, stretch=1)
 
-        ref_btn = QPushButton(" Refresh")
+        ref_btn = QPushButton(t("refresh"))
         ref_btn.setObjectName("Secondary")
         ref_btn.setIcon(get_icon("refresh", "#e4e4e7", 13))
         ref_btn.setIconSize(QSize(13, 13))
@@ -262,22 +287,23 @@ class SetupWindow(QWidget):
         row_llm.addWidget(ref_btn)
         l2.addLayout(row_llm)
 
-        rec_lbl = QLabel("Recommended lightweight Vietnamese models: qwen2.5:3b (1.9GB), gemma3:4b (3.1GB)")
+        rec_lbl = QLabel(t("llm_hint"))
         rec_lbl.setObjectName("Muted")
+        rec_lbl.setWordWrap(True)
         l2.addWidget(rec_lbl)
         root.addWidget(c2)
 
         # Card 3: Target Language & Search Engine
         c3, l3 = self._make_card()
-        t3 = QLabel("PREFERENCES")
+        t3 = QLabel(t("card_prefs"))
         t3.setObjectName("CardTitle")
         l3.addWidget(t3)
 
         pref_row = QHBoxLayout()
         self.lang_combo = QComboBox()
         self.lang_combo.setMinimumHeight(32)
-        self.lang_combo.addItem("Target Language: Tiếng Việt (vi)", "vi")
-        self.lang_combo.addItem("Target Language: English (en)", "en")
+        self.lang_combo.addItem(f"{t('pref_target')}: Tiếng Việt", "vi")
+        self.lang_combo.addItem(f"{t('pref_target')}: English", "en")
         l_idx = self.lang_combo.findData(self.config.target_language)
         if l_idx >= 0:
             self.lang_combo.setCurrentIndex(l_idx)
@@ -285,19 +311,29 @@ class SetupWindow(QWidget):
 
         self.engine_combo = QComboBox()
         self.engine_combo.setMinimumHeight(32)
-        self.engine_combo.addItem("Web Search: Google", "google")
-        self.engine_combo.addItem("Web Search: DuckDuckGo", "duckduckgo")
-        self.engine_combo.addItem("Web Search: Bing", "bing")
+        self.engine_combo.addItem(f"{t('pref_search')}: Google", "google")
+        self.engine_combo.addItem(f"{t('pref_search')}: DuckDuckGo", "duckduckgo")
+        self.engine_combo.addItem(f"{t('pref_search')}: Bing", "bing")
         e_idx = self.engine_combo.findData(self.config.search_engine)
         if e_idx >= 0:
             self.engine_combo.setCurrentIndex(e_idx)
         pref_row.addWidget(self.engine_combo)
         l3.addLayout(pref_row)
+
+        self.ui_lang_combo = QComboBox()
+        self.ui_lang_combo.setMinimumHeight(32)
+        self.ui_lang_combo.addItem(f"{t('pref_ui')}: {t('ui_auto')}", "auto")
+        self.ui_lang_combo.addItem(f"{t('pref_ui')}: Tiếng Việt", "vi")
+        self.ui_lang_combo.addItem(f"{t('pref_ui')}: English", "en")
+        u_idx = self.ui_lang_combo.findData(self.config.ui_language)
+        if u_idx >= 0:
+            self.ui_lang_combo.setCurrentIndex(u_idx)
+        l3.addWidget(self.ui_lang_combo)
         root.addWidget(c3)
 
         # Card 4: Model Cache & System Integration
         c4, l4 = self._make_card()
-        t4 = QLabel("MODEL CACHE & DESKTOP INTEGRATION")
+        t4 = QLabel(t("card_cache"))
         t4.setObjectName("CardTitle")
         l4.addWidget(t4)
 
@@ -306,25 +342,42 @@ class SetupWindow(QWidget):
         self.progress_bar.setTextVisible(False)
         l4.addWidget(self.progress_bar)
 
-        self.status_lbl = QLabel("Ready to download/verify models or install desktop service.")
+        self.status_lbl = QLabel(t("status_ready"))
         self.status_lbl.setObjectName("Muted")
+        self.status_lbl.setWordWrap(True)
         l4.addWidget(self.status_lbl)
 
         act_row = QHBoxLayout()
-        self.warmup_btn = QPushButton(" Download && Warmup Models")
+        self.warmup_btn = QPushButton(t("btn_warmup"))
         self.warmup_btn.setIcon(get_icon("download", "#e4e4e7", 13))
         self.warmup_btn.setObjectName("Secondary")
         self.warmup_btn.setMinimumHeight(36)
         self.warmup_btn.clicked.connect(self._start_warmup)
         act_row.addWidget(self.warmup_btn)
 
-        self.install_btn = QPushButton(" Install App && Systemd Service")
+        self.install_btn = QPushButton(t("btn_install"))
         self.install_btn.setIcon(get_icon("settings", "#e4e4e7", 13))
         self.install_btn.setObjectName("Secondary")
         self.install_btn.setMinimumHeight(36)
         self.install_btn.clicked.connect(self._install_desktop_app)
         act_row.addWidget(self.install_btn)
         l4.addLayout(act_row)
+
+        act_row2 = QHBoxLayout()
+        self.uninstall_btn = QPushButton(t("btn_uninstall"))
+        self.uninstall_btn.setIcon(get_icon("power", "#f87171", 13))
+        self.uninstall_btn.setObjectName("Danger")
+        self.uninstall_btn.setMinimumHeight(36)
+        self.uninstall_btn.clicked.connect(self._uninstall_desktop_app)
+        act_row2.addWidget(self.uninstall_btn)
+
+        self.about_btn = QPushButton(t("btn_about"))
+        self.about_btn.setIcon(get_icon("sparkles", "#e4e4e7", 13))
+        self.about_btn.setObjectName("Secondary")
+        self.about_btn.setMinimumHeight(36)
+        self.about_btn.clicked.connect(self._show_about)
+        act_row2.addWidget(self.about_btn)
+        l4.addLayout(act_row2)
         root.addWidget(c4)
 
         root.addStretch()
@@ -332,13 +385,13 @@ class SetupWindow(QWidget):
         # Footer
         footer = QHBoxLayout()
         footer.addStretch()
-        close_btn = QPushButton("Cancel")
+        close_btn = QPushButton(t("btn_cancel"))
         close_btn.setObjectName("Secondary")
         close_btn.setMinimumHeight(32)
         close_btn.clicked.connect(self.close)
         footer.addWidget(close_btn)
 
-        save_btn = QPushButton("Save Changes")
+        save_btn = QPushButton(t("btn_save"))
         save_btn.setMinimumHeight(32)
         save_btn.clicked.connect(self._save_and_close)
         footer.addWidget(save_btn)
@@ -351,7 +404,7 @@ class SetupWindow(QWidget):
 
         added = set()
         for m in installed:
-            self.ollama_combo.addItem(f"{m} (Installed)", m)
+            self.ollama_combo.addItem(f"{m} ({t('installed_tag')})", m)
             added.add(m)
 
         for code, label in RECOMMENDED_VI_MODELS:
@@ -369,8 +422,8 @@ class SetupWindow(QWidget):
         data = self.ollama_combo.currentData()
         if data:
             return str(data)
-        raw = self.ollama_combo.currentText().split("—")[0].replace("(Installed)", "").strip()
-        return raw or "qwen2.5:3b"
+        raw = self.ollama_combo.currentText().split("—")[0].replace(f"({t('installed_tag')})", "").strip()
+        return raw or "qwen3:4b"
 
     def _start_warmup(self):
         self.warmup_btn.setEnabled(False)
@@ -388,7 +441,7 @@ class SetupWindow(QWidget):
 
     def _on_finished(self, ok: bool, msg: str):
         self.warmup_btn.setEnabled(True)
-        self.status_lbl.setText(msg if ok else f"Error: {msg}")
+        self.status_lbl.setText(msg if ok else t("status_error") + msg)
         if ok:
             self.config.setup_completed = True
             self._save_config_data()
@@ -399,9 +452,30 @@ class SetupWindow(QWidget):
         ok, msg = install_system_integration()
         self.status_lbl.setText(msg)
         if ok:
-            QMessageBox.information(self, "Installation Complete", msg)
+            QMessageBox.information(self, t("install_done"), msg)
+
+    def _uninstall_desktop_app(self):
+        from ..installer import uninstall_system_integration
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(t("uninstall_title"))
+        box.setText(t("uninstall_confirm"))
+        purge = QCheckBox(t("uninstall_purge"))
+        box.setCheckBox(purge)
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        if box.exec() != QMessageBox.StandardButton.Yes:
+            return
+        ok, msg = uninstall_system_integration(purge_data=purge.isChecked())
+        self.status_lbl.setText(msg)
+        QMessageBox.information(self, t("uninstall_done"), msg)
+
+    def _show_about(self):
+        QMessageBox.information(self, t("about_title"), t("about_body"))
 
     def _save_config_data(self):
+        self.config.ui_language = self.ui_lang_combo.currentData()
         self.config.bg_removal_model = self.bg_combo.currentData()
         self.config.ollama_model = self._get_selected_ollama_model()
         self.config.target_language = self.lang_combo.currentData()

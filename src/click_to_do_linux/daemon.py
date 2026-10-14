@@ -12,6 +12,7 @@ from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .ai.ocr import OCREngine
+from .i18n import t
 from .capture.screen import ScreenCapture
 from .ui.icons import get_icon
 from .ui.overlay import OverlayWindow
@@ -52,7 +53,7 @@ class ClickToDoDaemon:
         icon = QIcon.fromTheme("click-to-do", get_icon("app_logo", "#38bdf8", 22))
         self.app.setWindowIcon(icon)
         self.tray = QSystemTrayIcon(icon, self.app)
-        self.tray.setToolTip("Click to Do — Left-click: Capture | Right-click: Menu")
+        self.tray.setToolTip(t("tray_tooltip"))
 
         menu = QMenu()
         menu.setStyleSheet("""
@@ -68,21 +69,21 @@ class ClickToDoDaemon:
             QMenu::item:selected { background-color: #27272a; color: #ffffff; }
         """)
 
-        act_cap = QAction(get_icon("sparkles", "#38bdf8", 14), "Capture Screen (Click to Do)", menu)
+        act_cap = QAction(get_icon("sparkles", "#38bdf8", 14), t("tray_capture"), menu)
         act_cap.triggered.connect(lambda: QTimer.singleShot(120, self.trigger_overlay))
         menu.addAction(act_cap)
 
-        act_color = QAction(get_icon("pipette", "#e4e4e7", 14), "Pick Screen Color (HEX)", menu)
+        act_color = QAction(get_icon("pipette", "#e4e4e7", 14), t("tray_color"), menu)
         act_color.triggered.connect(lambda: QTimer.singleShot(120, lambda: self.trigger_overlay(start_color_picker=True)))
         menu.addAction(act_color)
 
         menu.addSeparator()
 
-        act_set = QAction(get_icon("settings", "#e4e4e7", 14), "Settings & Local Models", menu)
+        act_set = QAction(get_icon("settings", "#e4e4e7", 14), t("tray_settings"), menu)
         act_set.triggered.connect(self.open_settings)
         menu.addAction(act_set)
 
-        act_quit = QAction(get_icon("power", "#f87171", 14), "Quit Daemon", menu)
+        act_quit = QAction(get_icon("power", "#f87171", 14), t("tray_quit"), menu)
         act_quit.triggered.connect(self.app.quit)
         menu.addAction(act_quit)
 

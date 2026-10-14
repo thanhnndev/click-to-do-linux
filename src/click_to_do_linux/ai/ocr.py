@@ -1,9 +1,47 @@
 """High-speed OCR Engine with automatic HiDPI coordinate scaling."""
 
+import os
+import shutil
+import subprocess
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Optional, Tuple
 import numpy as np
-from PIL import Image
+import requests
+from PIL import Image, ImageOps
+
+TESSDATA_BASE_URL = "https://github.com/tesseract-ocr/tessdata_fast/raw/main"
+TESS_LANGS = ("vie", "eng")
+
+
+def get_tessdata_dir() -> Path:
+    d = Path.home() / ".local" / "share" / "click-to-do" / "tessdata"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def tesseract_ready() -> bool:
+    """True when the tesseract binary and Vietnamese + English data are available."""
+    if not shutil.which("tesseract"):
+        return False
+    d = get_tessdata_dir()
+    return all((d / f"{lang}.traineddata").exists() for lang in TESS_LANGS)
+
+
+def download_tessdata() -> None:
+    """Fetches the compact Vietnamese/English Tesseract models (~4.6 MB) to the user data dir."""
+    d = get_tessdata_dir()
+    for lang in TESS_LANGS:
+        dest = d / f"{lang}.traineddata"
+        if dest.exists():
+            continue
+        r = requests.get(f"{TESSDATA_BASE_URL}/{lang}.traineddata", timeout=60)
+        r.raise_for_status()
+        tmp = dest.with_suffix(".part")
+        tmp.write_bytes(r.content)
+        tmp.replace(dest)
 
 
 @dataclass
@@ -47,11 +85,54 @@ class OCREngine:
         except Exception:
             pass
 
+    @staticmethod
+    def _tesseract_line(crop: Image.Image) -> str:
+        """Reads one text line with Tesseract (vie+eng) so Vietnamese diacritics are preserved."""
+        w, h = crop.size
+        if h < 48:  # small UI text: upscale for the LSTM recognizer
+            k = 48 / h
+            crop = crop.resize((max(1, int(w * k)), 48), Image.Resampling.LANCZOS)
+        crop = ImageOps.expand(crop.convert("L"), border=10, fill=255 if np.asarray(crop.convert("L")).mean() > 127 else 0)
+        with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+            crop.save(tmp.name)
+            env = dict(os.environ, TESSDATA_PREFIX=str(get_tessdata_dir()), OMP_THREAD_LIMIT="1")
+            out = subprocess.run(
+                ["tesseract", tmp.name, "-", "-l", "vie+eng", "--psm", "7", "--dpi", "150"],
+                capture_output=True, text=True, env=env, timeout=10,
+            )
+        return " ".join(out.stdout.split())
+
+    def _detect_hybrid(self, image: Image.Image, img_np: np.ndarray):
+        """RapidOCR finds text lines; Tesseract reads them. Returns [(pts, text, conf)] or None."""
+        det, _ = self.engine(img_np, use_det=True, use_cls=False, use_rec=False)
+        if not det:
+            return []
+        crops = []
+        for pts in det:
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            pad = 3
+            box = (
+                max(0, int(min(xs)) - pad), max(0, int(min(ys)) - pad),
+                min(image.width, int(max(xs)) + pad), min(image.height, int(max(ys)) + pad),
+            )
+            crops.append((pts, image.crop(box)))
+        with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as pool:
+            texts = list(pool.map(lambda c: self._tesseract_line(c[1]), crops))
+        return [(pts, t, 0.9) for (pts, _), t in zip(crops, texts)]
+
     def detect(self, image: Image.Image, scale_factor: float = 1.0) -> List[TextBox]:
         """Runs OCR on physical image and normalizes bounding boxes to logical UI coordinates."""
         img_np = np.array(image)
         try:
-            results, _ = self.engine(img_np)
+            results = None
+            if tesseract_ready():
+                try:
+                    results = self._detect_hybrid(image.convert("RGB"), img_np)
+                except Exception as e:
+                    print(f"[OCREngine] Tesseract path failed, falling back to RapidOCR: {e}")
+            if results is None:
+                results, _ = self.engine(img_np)
             if not results:
                 return []
 

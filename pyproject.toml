@@ -1,7 +1,10 @@
 [project]
 name = "click-to-do-linux"
 version = "0.1.0"
-description = "Add your description here"
+description = "Click to Do for Linux: instant OCR (Vietnamese-aware), subject cutout and local AI overlay for Wayland"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+keywords = ["wayland", "ocr", "ollama", "vietnamese", "click-to-do"]
 readme = "README.md"
 authors = [
     { name = "thanhnndev", email = "thanhnn16.work@gmail.com" }
