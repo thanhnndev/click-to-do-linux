@@ -1,158 +1,120 @@
-# Click to Do (Linux) 🚀
+# Click to Do for Linux
 
-> **Port tính năng "Click to Do" từ Windows 11 Copilot+ PC sang Linux**, tận dụng khả năng tăng tốc phần cứng từ **AI NPU** (AMD XDNA 2 / Intel VPU), **GPU** (NVIDIA RTX / AMD ROCm), và **CPU đa nhân AVX-512**.
+A high-speed, native-feeling port of **Windows 11 Click to Do** built for modern Wayland compositors (**Niri**, **Umbriel**, **Hyprland**, **Sway**, **KDE Plasma**, **GNOME**).
 
----
-
-## 🌟 Giới thiệu
-
-Trên Windows 11 24H2 Copilot+ PC, **Click to Do** là tính năng tương tác màn hình thông minh:
-Khi bạn bấm phím tắt, màn hình lập tức đóng băng lại với giao diện overlay hiện đại. AI sẽ phân tích toàn bộ màn hình để:
-- **Tự động nhận diện chữ (OCR)**: Cho phép chọn từ, đoạn văn, copy văn bản, tìm kiếm Google, hoặc gọi trợ lý AI để Tóm tắt / Giải thích / Dịch thuật.
-- **Tách nền thông minh (Subject Cutout)**: Tự động tách chủ thể (người, đồ vật, icon, sản phẩm) ra khỏi nền thành ảnh PNG trong suốt lưu vào clipboard.
-- **Làm mờ nền (Background Blur)**: Giữ chủ thể rõ nét và làm mờ phông nền xung quanh.
-- **Quét mã QR & Liên kết**: Tự động nhận diện mã QR trên màn hình để click mở web hoặc copy link ngay lập tức.
-- **Trợ lý AI cục bộ (Local LLM via Ollama)**: Tóm tắt, giải thích code, dịch thuật trực tiếp không phụ thuộc cloud.
-
-Dự án **Click to Do Linux** tái hiện hoàn hảo trải nghiệm này trên Linux (hỗ trợ đầy đủ Wayland như **Niri**, **Hyprland**, **Sway**, **KDE Plasma**, **GNOME**).
+Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze the screen in **< 25ms**, detect text and QR codes in the background, isolate subjects (AI Cutout), redact sensitive areas, and run local Vietnamese/English LLMs via Ollama.
 
 ---
 
-## ⚡ Kiến trúc tăng tốc phần cứng AI (NPU & GPU)
+## Key Features
 
-Hệ thống được thiết kế theo kiến trúc module đa tầng với **ONNX Runtime**:
-1. **NPU Backend**:
-   - Hỗ trợ **AMD XDNA 2 NPU** (Ryzen AI 9 HX 370 / Strix Point 50 TOPS qua driver kernel `amdxdna` và node `/dev/accel/accel0`).
-   - Hỗ trợ **Intel NPU** (Core Ultra qua `intel_vpu` và OpenVINO).
-2. **GPU Backend**:
-   - NVIDIA GPU (RTX 5060, 4060, v.v.) qua CUDA / TensorRT.
-3. **CPU Zen 5 AVX-512**:
-   - Fallback siêu tốc với tập lệnh đa luồng AVX-512.
+- **Instant Screen Freeze (< 25ms):** Streams uncompressed framebuffers directly from `grim` into RAM (`QImage` / `PIL.Image`) with zero temporary disk writes and zero PNG encoding overhead.
+- **HiDPI & Multi-Monitor Native:** Automatically maps physical framebuffer pixels to logical Wayland coordinates (1.0x, 1.5x, 2.0x fractional scaling) without offset or blurriness.
+- **Zero-Scroll Overlay on Niri:** Uses stationary `(0, 0)` floating window rules so activating the overlay never shifts or scrolls Niri tiling columns.
+- **Direct Point-and-Click Text Interaction:**
+  - **Single-click** any text line to open the contextual action pill (`Copy`, `Translate`, `Explain`, `Ask AI`, `Search`).
+  - **Double-click** any text line to immediately copy and exit in 0.5s.
+  - **`Shift + Click`** multiple lines to merge non-contiguous text blocks.
+  - **Live Screen Find (`Ctrl + F`):** Highlight matching text anywhere on screen in real time.
+- **Image & Subject Intelligence (Drag Selection):**
+  - **AI Subject Cutout (`u2netp` / `isnet`):** Removes background into a transparent PNG directly in your Wayland clipboard.
+  - **Background Blur:** Isolates the subject and blurs the surrounding backdrop.
+  - **Privacy Redact:** Pixelates sensitive regions (keys, emails, personal info) before copying.
+  - **Built-in Eyedropper / Color Picker:** Middle-click anywhere (or click `Pick Color`) with a live HEX magnifier loupe.
+- **Universal Bar Quick-Action Button:**
+  - **System Tray (`StatusNotifierItem`):** Automatically embeds a sleek vector icon in **Dank Material Shell**, **Umbriel**, **Waybar**, **Quickshell**, **Hyprpanel**, or **KDE** (Left-click: Capture, Middle-click: Pick Color, Right-click: Menu).
+  - **Custom Bar Module (`click-to-do bar-status`):** JSON output for custom bar widgets.
 
 ---
 
-## 🛠️ Cài đặt & Quản lý môi trường (với `mise` và `uv`)
+## Recommended Local AI Models (Vietnamese & English)
 
-Dự án tích hợp sẵn file `.mise.toml` để quản lý runtime:
+| Task | Model | Size | Highlights |
+| :--- | :--- | :--- | :--- |
+| **LLM (Best Speed/Vietnamese)** | `qwen2.5:3b` | ~1.9 GB | Ultra-fast streaming (>90 tok/s), natural Vietnamese translation & summarization. |
+| **LLM (Code & Reasoning)** | `gemma3:4b` | ~3.1 GB | Strong multilingual comprehension and code explanation. |
+| **LLM (Ultra-Light CPU/iGPU)** | `qwen2.5:1.5b` | ~980 MB | Runs effortlessly on iGPU/CPU with near-zero VRAM footprint. |
+| **LLM (High Accuracy)** | `qwen2.5:7b` | ~4.7 GB | Fits comfortably in 8GB VRAM for polished rewrites and complex queries. |
+| **Subject Cutout (Fast)** | `u2netp` | 4.7 MB | Instant subject isolation (< 50ms). |
+| **Subject Cutout (Detailed)** | `isnet-general-use` | 170 MB | High-precision edge segmentation. |
+
+---
+
+## Installation & App Setup
+
+### 1. Build & Install as a Desktop App
+ inside the project directory (managed by `mise` and `uv`):
 
 ```bash
-# 1. Kiểm tra môi trường với mise
-mise install
-
-# 2. Cài đặt các thư viện cần thiết với uv
 uv sync
+uv run click-to-do install
+
 ```
+
+Running `click-to-do install` automatically:
+
+1. Links the `click-to-do` executable into `~/.local/bin/click-to-do`.
+2. Installs the desktop launcher (`~/.local/share/applications/click-to-do.desktop`) and scalable vector icon.
+3. Configures and starts the **Systemd User Service** (`click-to-do.service`) so the background daemon and bar icon start automatically across any desktop/compositor.
+4. Injects the non-scrolling floating rule into `~/.config/niri/config.kdl` (if Niri is installed).
+
+### 2. Configure Models (GUI)
+
+```bash
+click-to-do settings
+
+```
+
+Select your preferred Cutout engine and Ollama model, then click **Download & Warmup Models**.
 
 ---
 
-## 🖥️ Hướng dẫn sử dụng
+## Compositor & Bar Integration
 
-### 1. Kiểm tra phần cứng AI NPU & GPU
-Chạy lệnh chẩn đoán phần cứng:
-```bash
-uv run click-to-do status
-```
-*Kết quả sẽ hiển thị chi tiết NPU (`/dev/accel/accel0`), driver `amdxdna`, GPU, và Engine đang kích hoạt.*
+### 1. Niri (`~/.config/niri/config.kdl`)
 
-### 2. Kích hoạt Click to Do (Overlay Mode)
-```bash
-uv run click-to-do capture
-```
-Hoặc:
-```bash
-uv run click-to-do
-```
+Add the shortcut inside your `binds { ... }` block:
 
-### 3. Thao tác trên giao diện
-- **Bấm vào chữ**: Tự động chọn dòng chữ đó và hiện menu:
-  - 📋 **Sao chép** (Copy text)
-  - 🌐 **Mở liên kết** (Nếu có URL)
-  - 🔍 **Tìm kiếm Google / DuckDuckGo**
-  - 🤖 **Trợ lý AI**: Tóm tắt, Giải thích, Dịch sang Tiếng Việt, Viết lại câu.
-- **Kéo chuột (Drag & Drop)**: Chọn một vùng hình chữ nhật bất kỳ:
-  - 📋 **Sao chép ảnh** vào Clipboard
-  - ✂️ **Tách nền (AI Cutout)**: Tách chủ thể thành PNG trong suốt
-  - 🌫️ **Làm mờ nền**: Blur phông nền xung quanh
-  - 🔍 **Tìm ảnh với Google Lens**
-  - 💾 **Lưu file ảnh**
-- **Bấm vào mã QR**: Mở trực tiếp link trong trình duyệt hoặc copy nội dung mã.
-- **Thoát**: Bấm phím `Esc` hoặc nhấp chuột phải bất kỳ đâu để đóng overlay.
-
----
-
-## ⌨️ Cài đặt phím tắt (Hotkey Integration)
-
-Xem hướng dẫn cấu hình phím tắt cho Desktop của bạn:
-```bash
-uv run click-to-do setup
-```
-
-### Cấu hình cho **Niri** (`~/.config/niri/config.kdl`):
-Thêm vào block `binds { ... }`:
 ```kdl
 binds {
     Mod+Q { spawn "click-to-do" "capture"; }
     Print { spawn "click-to-do" "capture"; }
 }
+
 ```
 
-### Cấu hình cho **Hyprland** (`~/.config/hypr/hyprland.conf`):
-```ini
-bind = SUPER, Q, exec, click-to-do capture
-bind = , Print, exec, click-to-do capture
-```
+### 2. Umbriel / Waybar / Custom Bar Quick-Action Button
 
-### Cấu hình cho **KDE Plasma / GNOME**:
-Vào **Settings -> Keyboard -> Shortcuts -> Custom Shortcuts**:
-- Tên: `Click to Do`
-- Lệnh: `click-to-do capture` (hoặc đường dẫn tới binary trong virtualenv: `/path/to/click-to-do-linux/.venv/bin/click-to-do capture`)
-- Phím tắt: `Super + Q` hoặc `PrintScreen`
+The background daemon **automatically displays a Quick-Action icon** in any bar supporting `StatusNotifierItem` (System Tray):
 
----
+* **Left Click:** Trigger Click to Do Overlay
+* **Middle Click:** Trigger Screen Color Picker (HEX)
+* **Right Click:** Open Quick Menu (`Capture`, `Pick Color`, `Settings`, `Quit`)
 
-## ⚙️ Tùy biến cấu hình (`~/.config/click-to-do/config.json`)
+If you also want a dedicated custom button module (e.g. in **Waybar** or **Umbriel**), use:
 
-File cấu hình tự động được sinh tại `~/.config/click-to-do/config.json`:
 ```json
-{
-  "ai_provider": "auto",
-  "ocr_engine": "rapidocr",
-  "bg_removal_model": "isnet-general-use",
-  "ollama_enabled": true,
-  "ollama_host": "http://localhost:11434",
-  "ollama_model": "qwen2.5:latest",
-  "target_language": "vi",
-  "search_engine": "google",
-  "visual_search": "google_lens",
-  "theme": "dark_glass",
-  "save_directory": "/home/user/Pictures/ClickToDo"
+"custom/click-to-do": {
+    "exec": "click-to-do bar-status",
+    "return-type": "json",
+    "interval": "once",
+    "on-click": "click-to-do capture",
+    "on-click-middle": "click-to-do color",
+    "on-click-right": "click-to-do settings"
 }
+
 ```
 
 ---
 
-## 📦 Cấu trúc mã nguồn
+## CLI Reference
 
-```
-click-to-do-linux/
-├── src/click_to_do_linux/
-│   ├── ai/
-│   │   ├── ocr.py            # Nhận diện chữ & layout (RapidOCR ONNX)
-│   │   ├── segmentation.py   # Tách nền & làm mờ chủ thể (ONNX Rembg)
-│   │   ├── entities.py       # Quét QR code, URL, Email, Hex color
-│   │   └── llm.py            # Kết nối Ollama cục bộ (Tóm tắt, Dịch, Giải thích)
-│   ├── capture/
-│   │   └── screen.py         # Chụp màn hình Wayland siêu tốc (grim / /dev/shm)
-│   ├── ui/
-│   │   ├── overlay.py        # Toàn màn hình đóng băng & canvas tương tác
-│   │   ├── action_bar.py     # Thanh công cụ nổi dạng viên thuốc (Pill Bar)
-│   │   ├── ai_dialog.py      # Cửa sổ hiển thị kết quả AI trực tiếp dạng stream
-│   │   └── theme.py          # Giao diện Glassmorphism / Fluent UI
-│   ├── utils/
-│   │   └── clipboard.py      # Tương tác clipboard Wayland (wl-copy)
-│   ├── config.py             # Quản lý cấu hình
-│   ├── hardware.py           # Tự động nhận diện AMD XDNA NPU, GPU, CPU
-│   └── main.py               # CLI entrypoint
-├── .mise.toml                # Cấu hình mise (Python 3.12, uv)
-└── pyproject.toml            # Khai báo dependencies & CLI scripts
-```
+| Command | Description |
+| --- | --- |
+| `click-to-do capture` | Freeze screen and open interactive overlay (< 25ms via daemon) |
+| `click-to-do color` | Open overlay directly in HEX Color Picker loupe mode |
+| `click-to-do settings` | Open minimalist Settings & Local Model Manager GUI |
+| `click-to-do daemon` | Start background resident daemon and universal bar icon |
+| `click-to-do install` | Install desktop app, icon, and systemd user service |
+| `click-to-do bar-status` | Print JSON status for custom bar modules |
+| `click-to-do stop` | Stop the running background daemon |

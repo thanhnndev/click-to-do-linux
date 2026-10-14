@@ -11,13 +11,15 @@ from PyQt6.QtWidgets import QApplication
 
 from .capture.screen import ScreenCapture
 from .config import load_config
-from .daemon import APP_ID, ClickToDoDaemon, send_command_to_daemon
+from .daemon import APP_ID, ClickToDoDaemon, print_bar_status_json, send_command_to_daemon
+from .installer import install_system_integration
 from .ui.overlay import OverlayWindow
 from .ui.setup_window import SetupWindow
 
 
-def run_capture():
-    if send_command_to_daemon("capture"):
+def run_capture(color_mode: bool = False):
+    cmd = "color" if color_mode else "capture"
+    if send_command_to_daemon(cmd):
         return
 
     QGuiApplication.setDesktopFileName(APP_ID)
@@ -34,11 +36,15 @@ def run_capture():
         sys.exit(1)
 
     overlay = OverlayWindow(captured)
+    if color_mode:
+        overlay.color_picker_active = True
     overlay.show_exact_overlay()
     sys.exit(app.exec())
 
 
 def run_settings():
+    if send_command_to_daemon("settings"):
+        return
     QGuiApplication.setDesktopFileName(APP_ID)
     app = QApplication.instance() or QApplication(sys.argv)
     win = SetupWindow()
@@ -47,20 +53,31 @@ def run_settings():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Click to Do Linux")
+    parser = argparse.ArgumentParser(description="Click to Do Linux — Screen Intelligence Overlay")
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("capture", help="Trigger instant screen overlay")
-    subparsers.add_parser("daemon", help="Run background daemon")
-    subparsers.add_parser("settings", help="Open settings and model manager")
+    subparsers.add_parser("color", help="Trigger screen HEX color picker")
+    subparsers.add_parser("daemon", help="Run resident background daemon & bar tray icon")
+    subparsers.add_parser("settings", help="Open settings and local AI model manager")
+    subparsers.add_parser("install", help="Build and install desktop app, icon, and systemd service")
+    subparsers.add_parser("bar-status", help="Output JSON status for custom Waybar/Umbriel modules")
     subparsers.add_parser("stop", help="Stop background daemon")
 
     args = parser.parse_args()
 
     if args.command == "daemon":
         ClickToDoDaemon().run()
+    elif args.command == "color":
+        run_capture(color_mode=True)
     elif args.command == "settings":
         run_settings()
+    elif args.command == "install":
+        ok, msg = install_system_integration()
+        print(msg)
+        sys.exit(0 if ok else 1)
+    elif args.command == "bar-status":
+        print_bar_status_json()
     elif args.command == "stop":
         send_command_to_daemon("quit")
     else:
