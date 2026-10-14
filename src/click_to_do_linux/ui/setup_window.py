@@ -11,7 +11,10 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QPlainTextEdit,
+    QLineEdit,
     QProgressBar,
+    QTabWidget,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -22,6 +25,10 @@ from ..ai.ocr import OCREngine, download_tessdata, tesseract_ready
 from ..i18n import set_lang, t
 from ..ai.segmentation import SegmentationEngine
 from ..config import Config, get_config_dir, load_config, save_config
+from .. import compositor as comp_mod
+
+DEFAULT_CAPTURE = comp_mod.DEFAULT_CAPTURE_KEY
+DEFAULT_COLOR = comp_mod.DEFAULT_COLOR_KEY
 from .icons import get_icon
 
 # (ollama tag, display label). Sizes are Ollama q4_K_M downloads; see README for the full table.
@@ -77,7 +84,7 @@ class SetupWindow(QWidget):
         self.config: Config = load_config()
         set_lang(self.config.ui_language)
         self.setWindowTitle(t("set_title"))
-        self.setFixedSize(600, 700)
+        self.setFixedSize(640, 740)
 
         arrow_path = get_config_dir() / "chevron-down.svg"
         if not arrow_path.exists():
@@ -94,6 +101,7 @@ class SetupWindow(QWidget):
                 font-family: "Inter", "Noto Sans", system-ui, sans-serif;
                 font-size: 13px;
             }}
+            QLabel {{ background: transparent; }}
             QFrame#Card {{
                 background-color: #121215;
                 border: 1px solid #27272a;
@@ -199,6 +207,22 @@ class SetupWindow(QWidget):
                 color: #ffffff;
                 border: 1px solid #3f3f46;
             }}
+            QTabWidget::pane {{ border: none; }}
+            QTabBar::tab {{
+                background: transparent; color: #71717a; padding: 8px 16px;
+                border: none; border-bottom: 2px solid transparent; font-size: 12px; font-weight: 600;
+            }}
+            QTabBar::tab:selected {{ color: #ffffff; border-bottom: 2px solid #38bdf8; }}
+            QTabBar::tab:hover {{ color: #e4e4e7; }}
+            QLineEdit {{
+                background-color: #18181b; border: 1px solid #27272a; border-radius: 6px;
+                padding: 6px 10px; color: #e4e4e7; font-size: 12px; min-height: 24px;
+            }}
+            QLineEdit:focus {{ border: 1px solid #38bdf8; }}
+            QPlainTextEdit {{
+                background-color: #0c0c0f; border: 1px solid #27272a; border-radius: 6px;
+                color: #a5f3fc; font-family: "JetBrains Mono", "Fira Code", monospace; font-size: 11px; padding: 6px;
+            }}
             QPushButton#Danger {{
                 background-color: #18181b;
                 color: #f87171;
@@ -249,6 +273,19 @@ class SetupWindow(QWidget):
         hdr.addWidget(sub)
         root.addLayout(hdr)
 
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        root.addWidget(self.tabs, stretch=1)
+        pages = []
+        for title_key in ("tab_general", "tab_shortcuts", "tab_system"):
+            page = QWidget()
+            lay = QVBoxLayout(page)
+            lay.setContentsMargins(0, 12, 0, 0)
+            lay.setSpacing(12)
+            self.tabs.addTab(page, t(title_key))
+            pages.append(lay)
+        p_general, p_keys, p_system = pages
+
         # Card 1: Vision & Cutout Model
         c1, l1 = self._make_card()
         t1 = QLabel(t("card_cutout"))
@@ -263,7 +300,7 @@ class SetupWindow(QWidget):
         if idx >= 0:
             self.bg_combo.setCurrentIndex(idx)
         l1.addWidget(self.bg_combo)
-        root.addWidget(c1)
+        p_general.addWidget(c1)
 
         # Card 2: Vietnamese Local LLM (Ollama)
         c2, l2 = self._make_card()
@@ -291,7 +328,7 @@ class SetupWindow(QWidget):
         rec_lbl.setObjectName("Muted")
         rec_lbl.setWordWrap(True)
         l2.addWidget(rec_lbl)
-        root.addWidget(c2)
+        p_general.addWidget(c2)
 
         # Card 3: Target Language & Search Engine
         c3, l3 = self._make_card()
@@ -329,7 +366,7 @@ class SetupWindow(QWidget):
         if u_idx >= 0:
             self.ui_lang_combo.setCurrentIndex(u_idx)
         l3.addWidget(self.ui_lang_combo)
-        root.addWidget(c3)
+        p_general.addWidget(c3)
 
         # Card 4: Model Cache & System Integration
         c4, l4 = self._make_card()
@@ -378,9 +415,11 @@ class SetupWindow(QWidget):
         self.about_btn.clicked.connect(self._show_about)
         act_row2.addWidget(self.about_btn)
         l4.addLayout(act_row2)
-        root.addWidget(c4)
-
-        root.addStretch()
+        p_system.addWidget(self._build_diag_card())
+        p_system.addWidget(c4)
+        p_general.addStretch()
+        p_system.addStretch()
+        self._build_shortcuts_tab(p_keys)
 
         # Footer
         footer = QHBoxLayout()
@@ -453,6 +492,190 @@ class SetupWindow(QWidget):
         self.status_lbl.setText(msg)
         if ok:
             QMessageBox.information(self, t("install_done"), msg)
+
+    # ------------------------------------------------------------ diagnostics
+    def _build_diag_card(self) -> QFrame:
+        card, lay = self._make_card()
+        ttl = QLabel(t("card_diag"))
+        ttl.setObjectName("CardTitle")
+        lay.addWidget(ttl)
+        self.diag_lbl = QLabel()
+        self.diag_lbl.setObjectName("Muted")
+        self.diag_lbl.setTextFormat(Qt.TextFormat.RichText)
+        self.diag_lbl.setWordWrap(True)
+        lay.addWidget(self.diag_lbl)
+        rb = QPushButton(t("refresh"))
+        rb.setObjectName("Secondary")
+        rb.setIcon(get_icon("refresh", "#e4e4e7", 13))
+        rb.clicked.connect(self._refresh_diag)
+        lay.addWidget(rb)
+        self._refresh_diag()
+        return card
+
+    def _refresh_diag(self):
+        def row(ok: bool, label: str, hint: str = "") -> str:
+            mark = '<span style="color:#4ade80">●</span>' if ok else '<span style="color:#f87171">●</span>'
+            extra = f' <span style="color:#52525b">— {hint}</span>' if (hint and not ok) else ""
+            return f"{mark}&nbsp; {label}{extra}"
+
+        c = comp_mod.detect()
+        llm = LLMService(host=self.config.ollama_host)
+        ollama_up = shutil.which("ollama") is not None and llm.is_available()
+        service_on = False
+        try:
+            service_on = subprocess.run(
+                ["systemctl", "--user", "is-active", "--quiet", "click-to-do.service"], timeout=2
+            ).returncode == 0
+        except Exception:
+            pass
+        rows = [
+            row(c.id != "generic", f"{t('diag_compositor')}: <b>{c.label}</b>", t("diag_unknown")),
+            row(bool(shutil.which("grim")), "grim", t("diag_install", p="grim")),
+            row(bool(shutil.which("wl-copy")), "wl-clipboard", t("diag_install", p="wl-clipboard")),
+            row(bool(shutil.which("tesseract")), "Tesseract (OCR tiếng Việt)", t("diag_install", p="tesseract")),
+            row(tesseract_ready(), t("diag_tessdata"), t("diag_tessdata_hint")),
+            row(ollama_up, "Ollama", t("diag_ollama_hint")),
+            row(service_on, t("diag_service"), t("diag_service_hint")),
+        ]
+        self.diag_lbl.setText("<br>".join(rows))
+
+    # ------------------------------------------------------------ shortcuts tab
+    def _build_shortcuts_tab(self, layout: QVBoxLayout):
+        self.comp = comp_mod.detect()
+
+        card, lay = self._make_card()
+        ttl = QLabel(t("card_detect"))
+        ttl.setObjectName("CardTitle")
+        lay.addWidget(ttl)
+        self.comp_lbl = QLabel()
+        self.comp_lbl.setTextFormat(Qt.TextFormat.RichText)
+        self.comp_lbl.setWordWrap(True)
+        lay.addWidget(self.comp_lbl)
+
+        self.comp_combo = QComboBox()
+        self.comp_combo.setMinimumHeight(32)
+        for cid, nm in (
+            ("niri", "Niri"), ("umbriel", "Umbriel"), ("hyprland", "Hyprland"), ("sway", "Sway"),
+            ("river", "River"), ("labwc", "labwc"), ("wayfire", "Wayfire"),
+            ("kde", "KDE Plasma"), ("gnome", "GNOME"), ("cosmic", "COSMIC"), ("generic", t("other")),
+        ):
+            self.comp_combo.addItem(nm, cid)
+        self.comp_combo.setCurrentIndex(max(0, self.comp_combo.findData(self.comp.id)))
+        self.comp_combo.currentIndexChanged.connect(self._on_comp_changed)
+        lay.addWidget(self.comp_combo)
+        layout.addWidget(card)
+
+        card2, lay2 = self._make_card()
+        t2 = QLabel(t("card_keys"))
+        t2.setObjectName("CardTitle")
+        lay2.addWidget(t2)
+        row = QHBoxLayout()
+        self.cap_key = QLineEdit(DEFAULT_CAPTURE)
+        self.cap_key.setPlaceholderText(t("key_capture"))
+        self.col_key = QLineEdit(DEFAULT_COLOR)
+        self.col_key.setPlaceholderText(t("key_color"))
+        for lab, edit in ((t("key_capture"), self.cap_key), (t("key_color"), self.col_key)):
+            col = QVBoxLayout()
+            m = QLabel(lab)
+            m.setObjectName("Muted")
+            col.addWidget(m)
+            col.addWidget(edit)
+            row.addLayout(col)
+            edit.textChanged.connect(self._refresh_snippet)
+        lay2.addLayout(row)
+        self.key_note = QLabel()
+        self.key_note.setObjectName("Muted")
+        self.key_note.setTextFormat(Qt.TextFormat.RichText)
+        self.key_note.setWordWrap(True)
+        lay2.addWidget(self.key_note)
+        layout.addWidget(card2)
+
+        card3, lay3 = self._make_card()
+        t3 = QLabel(t("card_snippet"))
+        t3.setObjectName("CardTitle")
+        lay3.addWidget(t3)
+        self.snippet_view = QPlainTextEdit()
+        self.snippet_view.setReadOnly(True)
+        self.snippet_view.setMinimumHeight(140)
+        lay3.addWidget(self.snippet_view)
+        btns = QHBoxLayout()
+        self.copy_snip_btn = QPushButton(" " + t("copy"))
+        self.copy_snip_btn.setObjectName("Secondary")
+        self.copy_snip_btn.setIcon(get_icon("copy", "#e4e4e7", 13))
+        self.copy_snip_btn.clicked.connect(self._copy_snippet)
+        btns.addWidget(self.copy_snip_btn)
+        self.apply_keys_btn = QPushButton(" " + t("keys_apply"))
+        self.apply_keys_btn.setIcon(get_icon("check", "#09090b", 13))
+        self.apply_keys_btn.clicked.connect(self._apply_keys)
+        btns.addWidget(self.apply_keys_btn)
+        self.remove_keys_btn = QPushButton(" " + t("keys_remove"))
+        self.remove_keys_btn.setObjectName("Secondary")
+        self.remove_keys_btn.clicked.connect(self._remove_keys)
+        btns.addWidget(self.remove_keys_btn)
+        lay3.addLayout(btns)
+        self.keys_status = QLabel()
+        self.keys_status.setObjectName("Muted")
+        self.keys_status.setWordWrap(True)
+        lay3.addWidget(self.keys_status)
+        layout.addWidget(card3)
+        layout.addStretch()
+        self._on_comp_changed()
+
+    def _current_comp(self) -> "comp_mod.Compositor":
+        cid = self.comp_combo.currentData()
+        if cid == self.comp.id:
+            return self.comp
+        paths = {
+            "niri": comp_mod.CONFIG_HOME / "niri" / "config.kdl",
+            "umbriel": comp_mod.CONFIG_HOME / "umbriel" / "config.toml",
+            "hyprland": comp_mod.CONFIG_HOME / "hypr" / "hyprland.conf",
+            "sway": comp_mod.CONFIG_HOME / "sway" / "config",
+            "river": comp_mod.CONFIG_HOME / "river" / "init",
+        }
+        return comp_mod.Compositor(cid, self.comp_combo.currentText(), paths.get(cid), cid in paths)
+
+    def _on_comp_changed(self):
+        c = self._current_comp()
+        detected = c.id == self.comp.id
+        tag = t("detected_auto") if detected else t("detected_manual")
+        cfg = f"<br><span style='color:#71717a'>{t('config_file')}: {c.config_path}</span>" if c.config_path else ""
+        self.comp_lbl.setText(f"<b>{c.label}</b> &nbsp;<span style='color:#38bdf8'>{tag}</span>{cfg}")
+        self.apply_keys_btn.setEnabled(c.can_apply)
+        self.remove_keys_btn.setEnabled(c.can_apply)
+        self._refresh_snippet()
+
+    def _refresh_snippet(self):
+        c = self._current_comp()
+        cap = self.cap_key.text().strip() or DEFAULT_CAPTURE
+        col = self.col_key.text().strip() or DEFAULT_COLOR
+        self.snippet_view.setPlainText(comp_mod.snippet(c.id, cap, col))
+        notes = []
+        for key in (cap, col):
+            for hit in comp_mod.find_conflicts(c, key):
+                notes.append(f"<span style='color:#fbbf24'>⚠ {t('key_conflict', k=key)}</span> <code>{hit}</code>")
+        for hit in comp_mod.existing_click_to_do_binds(c):
+            notes.append(f"<span style='color:#4ade80'>✓ {t('key_existing')}</span> <code>{hit}</code>")
+        self.key_note.setText("<br>".join(notes) or t("key_ok"))
+        self.key_note.setVisible(True)
+
+    def _copy_snippet(self):
+        from ..utils.clipboard import ClipboardManager
+
+        ClipboardManager.copy_text(self.snippet_view.toPlainText())
+        self.keys_status.setText(t("copied"))
+
+    def _apply_keys(self):
+        c = self._current_comp()
+        ok, msg = comp_mod.apply(
+            c, self.cap_key.text().strip() or DEFAULT_CAPTURE, self.col_key.text().strip() or DEFAULT_COLOR
+        )
+        self.keys_status.setText(msg)
+        if ok:
+            self._on_comp_changed()
+
+    def _remove_keys(self):
+        done = comp_mod.remove(self._current_comp())
+        self.keys_status.setText(t("keys_removed", n=len(done)))
 
     def _uninstall_desktop_app(self):
         from ..installer import uninstall_system_integration

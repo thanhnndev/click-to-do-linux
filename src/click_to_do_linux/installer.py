@@ -215,6 +215,13 @@ def uninstall_system_integration(purge_data: bool = False) -> tuple[bool, str]:
                 p.unlink()
                 removed.append(str(p))
 
+        try:
+            from . import compositor
+
+            removed += compositor.remove()
+        except Exception:
+            pass
+
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
         subprocess.run(["gtk-update-icon-cache", "-f", "-t", str(home / ".local" / "share" / "icons" / "hicolor")], check=False)
         subprocess.run(["update-desktop-database", str(home / ".local" / "share" / "applications")], check=False)

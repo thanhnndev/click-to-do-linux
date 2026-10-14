@@ -136,21 +136,52 @@ Models pulled with Ollama are left untouched; remove them with `ollama rm <model
 
 ---
 
-## Compositor & Bar Integration
+## Compositor & Keyboard Shortcuts
 
-### 1. Niri (`~/.config/niri/config.kdl`)
+**Settings → Shortcuts** detects your compositor (and the shell/bar on top of it), shows a ready-to-use snippet, checks your existing config for key conflicts, and can write the shortcuts for you.
+Defaults: `Mod+Shift+C` = capture, `Mod+Alt+C` = color picker (editable; `Mod` = Super).
 
-Add the shortcut inside your `binds { ... }` block:
+| Compositor | Auto-detect | One-click apply | How it is applied |
+| :--- | :---: | :---: | :--- |
+| **Niri** | ✅ | ✅ | writes `~/.config/niri/click-to-do.kdl` + one `include optional=true` line, then `niri msg action load-config-file` |
+| **Umbriel** | ✅ | ✅ | writes `~/.config/umbriel/click-to-do.toml` and adds it to `[include.optional]` |
+| **Hyprland** | ✅ | ✅ | writes `~/.config/hypr/click-to-do.conf` + `source = …`, then `hyprctl reload` |
+| **Sway** | ✅ | ✅ | writes `~/.config/sway/click-to-do.conf` + `include …`, then `swaymsg reload` |
+| **River** | ✅ | ✅ | appends a managed block to `~/.config/river/init` |
+| labwc / Wayfire | ✅ | guide | copy the generated XML / ini snippet |
+| KDE Plasma / GNOME / COSMIC | ✅ | guide | step-by-step instructions (GNOME: one-shot `gsettings` script) |
+
+Your own config files are never edited beyond a single include line (a `.click-to-do.bak` backup is made first). **Remove shortcuts** or `click-to-do uninstall` undoes it cleanly.
+
+> ⚠ `Mod+Q` is "close window" on most Niri/Umbriel setups — don't use it. The Settings tab warns you about any key that is already taken.
+
+Manual setup, if you prefer:
 
 ```kdl
+// Niri
 binds {
-    Mod+Q { spawn "click-to-do" "capture"; }
-    Print { spawn "click-to-do" "capture"; }
+    Mod+Shift+C repeat=false { spawn "click-to-do" "capture"; }
+    Mod+Alt+C   repeat=false { spawn "click-to-do" "color"; }
 }
-
 ```
 
-### 2. Umbriel / Waybar / Custom Bar Quick-Action Button
+```toml
+# Umbriel (keybinds.toml)
+[keybinds]
+"Mod+Shift+C" = { action = "spawn:click-to-do capture", repeat = false }
+```
+
+```ini
+# Hyprland
+bind = SUPER SHIFT, C, exec, click-to-do capture
+```
+
+```
+# Sway
+bindsym Mod4+Shift+c exec click-to-do capture
+```
+
+### Bar button — Umbriel / Noctalia / DMS / Waybar / Custom Bar Quick-Action Button
 
 The background daemon **automatically displays a Quick-Action icon** in any bar supporting `StatusNotifierItem` (System Tray):
 
