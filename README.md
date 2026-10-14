@@ -119,6 +119,23 @@ cd click-to-do-linux
 | Fedora / Nobara | `grim wl-clipboard tesseract tesseract-langpack-vie` + Qt runtime libs |
 | openSUSE | `grim wl-clipboard tesseract-ocr tesseract-ocr-traineddata-vietnamese` |
 
+#### Arch Linux — AUR / PKGBUILD
+
+```bash
+# from the AUR (once published)
+yay -S click-to-do-linux-git        # or paru
+
+# or build the PKGBUILD in this repo
+cd packaging/arch && makepkg -si
+```
+
+The package depends on `python-pyqt6`, `python-opencv`, `python-onnxruntime`, `grim`, `wl-clipboard`, `tesseract` (+ `vie`/`eng` data) and the AUR packages `python-rapidocr` and `python-rembg`. It installs the launcher, icons and a systemd *user* unit system-wide; then:
+
+```bash
+systemctl --user enable --now click-to-do.service
+click-to-do settings          # Shortcuts tab binds a key for your compositor
+```
+
 Developer setup from a checkout:
 
 ```bash
