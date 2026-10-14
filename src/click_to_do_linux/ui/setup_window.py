@@ -313,7 +313,9 @@ class SetupWindow(QWidget):
         self.backend_combo = QComboBox()
         self.backend_combo.setMinimumHeight(32)
         self.backend_combo.addItem(t("llm_backend_ollama"), "ollama")
-        self.backend_combo.addItem(t("llm_backend_npu"), "openai")
+        # The NPU choice is offered only on machines that actually expose an NPU (or if already selected)
+        if npu_mod.detect().present or self.config.llm_backend == "openai":
+            self.backend_combo.addItem(t("llm_backend_npu"), "openai")
         be_idx = self.backend_combo.findData(self.config.llm_backend)
         self.backend_combo.setCurrentIndex(max(0, be_idx))
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
