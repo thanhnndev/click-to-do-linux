@@ -1,12 +1,32 @@
-# Click to Do for Linux
+<p align="center">
+  <img src="assets/icon.png" width="96" height="96" alt="Click to Do for Linux Logo" />
+</p>
 
-A high-speed, native-feeling port of **Windows 11 Click to Do** built for modern Wayland compositors (**Niri**, **Umbriel**, **Hyprland**, **Sway**, **KDE Plasma**, **GNOME**).
+<h1 align="center">Click to Do for Linux</h1>
+
+<p align="center">
+  A high-speed, native-feeling port of <b>Windows 11 Click to Do</b> built for modern Wayland compositors (<b>Niri</b>, <b>Umbriel</b>, <b>Hyprland</b>, <b>Sway</b>, <b>KDE Plasma</b>, <b>GNOME</b>).
+</p>
+
+<!-- Demo GIF / Video Showcase Placeholder -->
+<p align="center">
+  <a href="assets/demo.gif">
+    <img src="assets/demo.gif" alt="Click to Do for Linux Interactive Demo" width="100%" />
+  </a>
+  <br>
+  <em>(Replace <code>assets/demo.gif</code> with your recorded walkthrough / showcase)</em>
+</p>
 
 Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze the screen in **< 25ms**, detect text and QR codes in the background, isolate subjects (AI Cutout), redact sensitive areas, and run local Vietnamese/English LLMs via Ollama.
 
 ---
 
 ## Key Features
+
+<p align="center">
+  <!-- Feature showcase screenshot placeholder -->
+  <img src="assets/screenshot-features.png" alt="Interactive Text & Vision Features" width="95%" />
+</p>
 
 - **Instant Screen Freeze (< 25ms):** Streams uncompressed framebuffers directly from `grim` into RAM (`QImage` / `PIL.Image`) with zero temporary disk writes and zero PNG encoding overhead.
 - **HiDPI & Multi-Monitor Native:** Automatically maps physical framebuffer pixels to logical Wayland coordinates (1.0x, 1.5x, 2.0x fractional scaling) without offset or blurriness.

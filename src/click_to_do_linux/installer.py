@@ -30,17 +30,29 @@ def install_system_integration() -> tuple[bool, str]:
     try:
         bin_path = get_executable_path()
 
-        # 1. Install SVG Icon
+        # 1. Install Scalable SVG Icon & PNG Icons
         icon_dir = Path.home() / ".local" / "share" / "icons" / "hicolor" / "scalable" / "apps"
         icon_dir.mkdir(parents=True, exist_ok=True)
         icon_file = icon_dir / "click-to-do.svg"
-        icon_file.write_text(get_svg_xml("app_logo", "#38bdf8", 64), encoding="utf-8")
 
-        # 2. Install Desktop Entries (Main App + Settings + Hidden Overlay ID)
+        project_svg = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.svg"
+        if project_svg.exists():
+            shutil.copy2(project_svg, icon_file)
+        else:
+            icon_file.write_text(get_svg_xml("app_logo", "#38bdf8", 64), encoding="utf-8")
+
+        png_dir = Path.home() / ".local" / "share" / "icons" / "hicolor" / "512x512" / "apps"
+        png_dir.mkdir(parents=True, exist_ok=True)
+        project_png = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.png"
+        if project_png.exists():
+            shutil.copy2(project_png, png_dir / "click-to-do.png")
+
+        # 2. Install Desktop Entries (Main App + Settings App + Hidden Overlay ID)
         apps_dir = Path.home() / ".local" / "share" / "applications"
         apps_dir.mkdir(parents=True, exist_ok=True)
 
-        (apps_dir / "click-to-do.desktop").write_text(
+        app_desktop = apps_dir / "click-to-do.desktop"
+        app_desktop.write_text(
             f"[Desktop Entry]\n"
             f"Type=Application\n"
             f"Name=Click to Do\n"
@@ -60,7 +72,22 @@ def install_system_integration() -> tuple[bool, str]:
             encoding="utf-8",
         )
 
-        (apps_dir / "click-to-do-overlay.desktop").write_text(
+        settings_desktop = apps_dir / "click-to-do-settings.desktop"
+        settings_desktop.write_text(
+            f"[Desktop Entry]\n"
+            f"Type=Application\n"
+            f"Name=Click to Do Settings\n"
+            f"GenericName=Settings & Local AI Model Manager\n"
+            f"Comment=Configure Click to Do overlay, local AI models (Ollama), and preferences\n"
+            f"Exec={bin_path} settings\n"
+            f"Icon=click-to-do\n"
+            f"Terminal=false\n"
+            f"Categories=Utility;Settings;Graphics;\n",
+            encoding="utf-8",
+        )
+
+        overlay_desktop = apps_dir / "click-to-do-overlay.desktop"
+        overlay_desktop.write_text(
             f"[Desktop Entry]\n"
             f"Type=Application\n"
             f"Name=Click to Do Overlay\n"
@@ -69,6 +96,16 @@ def install_system_integration() -> tuple[bool, str]:
             f"NoDisplay=true\n",
             encoding="utf-8",
         )
+
+        # 3. Create desktop shortcuts on ~/Desktop if directory exists
+        desktop_dir = Path.home() / "Desktop"
+        if desktop_dir.exists():
+            shutil.copy2(app_desktop, desktop_dir / "click-to-do.desktop")
+            shutil.copy2(settings_desktop, desktop_dir / "click-to-do-settings.desktop")
+            (desktop_dir / "click-to-do.desktop").chmod(0o755)
+            (desktop_dir / "click-to-do-settings.desktop").chmod(0o755)
+
+        subprocess.run(["update-desktop-database", str(apps_dir)], check=False)
 
         # 3. Install Systemd User Service (Works across Niri, Umbriel, Hyprland, Sway, KDE)
         systemd_dir = Path.home() / ".config" / "systemd" / "user"
