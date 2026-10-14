@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 from ..ai.llm import LLMService
 from ..ai.ocr import OCREngine
 from ..ai.segmentation import SegmentationEngine
-from ..config import Config, load_config, save_config
+from ..config import Config, get_config_dir, load_config, save_config
 from .icons import get_icon
 
 RECOMMENDED_VI_MODELS = [
@@ -63,93 +63,139 @@ class SetupWindow(QWidget):
         super().__init__()
         self.config: Config = load_config()
         self.setWindowTitle("Click to Do — Settings")
-        self.setFixedSize(540, 520)
-        self.setStyleSheet("""
-            QWidget {
+        self.setFixedSize(580, 620)
+
+        arrow_path = get_config_dir() / "chevron-down.svg"
+        if not arrow_path.exists():
+            arrow_path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+                encoding="utf-8",
+            )
+        arrow_url = arrow_path.as_posix()
+
+        self.setStyleSheet(f"""
+            QWidget {{
                 background-color: #09090b;
                 color: #f4f4f5;
                 font-family: "Inter", "Noto Sans", system-ui, sans-serif;
                 font-size: 13px;
-            }
-            QFrame#Card {
+            }}
+            QFrame#Card {{
                 background-color: #121215;
                 border: 1px solid #27272a;
                 border-radius: 8px;
-            }
-            QLabel#HeaderTitle {
+            }}
+            QLabel#HeaderTitle {{
                 font-size: 16px;
                 font-weight: 600;
                 color: #ffffff;
-            }
-            QLabel#HeaderSub {
+            }}
+            QLabel#HeaderSub {{
                 font-size: 12px;
                 color: #71717a;
-            }
-            QLabel#CardTitle {
+            }}
+            QLabel#CardTitle {{
                 font-size: 12px;
                 font-weight: 600;
                 color: #a1a1aa;
                 background: transparent;
-            }
-            QLabel#Muted {
+            }}
+            QLabel#Muted {{
                 font-size: 11px;
                 color: #71717a;
                 background: transparent;
-            }
-            QComboBox {
+            }}
+            QComboBox {{
                 background-color: #18181b;
                 border: 1px solid #27272a;
                 border-radius: 6px;
-                padding: 6px 10px;
+                padding: 6px 30px 6px 12px;
                 color: #e4e4e7;
                 font-size: 12px;
-            }
-            QComboBox:focus {
-                border: 1px solid #52525b;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #18181b;
-                border: 1px solid #27272a;
-                selection-background-color: #27272a;
+                min-height: 24px;
+            }}
+            QComboBox:hover {{
+                border: 1px solid #3f3f46;
+            }}
+            QComboBox:focus {{
+                border: 1px solid #38bdf8;
+            }}
+            QComboBox:editable {{
+                background: #18181b;
+            }}
+            QComboBox QLineEdit {{
+                background: transparent;
                 color: #e4e4e7;
-            }
-            QPushButton {
+                border: none;
+                font-size: 12px;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 26px;
+                border-left: 1px solid #27272a;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                background-color: #18181b;
+            }}
+            QComboBox::down-arrow {{
+                image: url("{arrow_url}");
+                width: 12px;
+                height: 12px;
+            }}
+            QComboBox::down-arrow:hover {{
+                image: url("{arrow_url}");
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: #18181b;
+                border: 1px solid #3f3f46;
+                border-radius: 6px;
+                selection-background-color: #27272a;
+                selection-color: #38bdf8;
+                color: #e4e4e7;
+                padding: 4px;
+                outline: none;
+            }}
+            QPushButton {{
                 background-color: #f4f4f5;
                 color: #09090b;
                 border: none;
                 border-radius: 6px;
-                padding: 7px 14px;
+                padding: 8px 16px;
                 font-size: 12px;
                 font-weight: 600;
-            }
-            QPushButton:hover {
+                min-height: 22px;
+            }}
+            QPushButton:hover {{
                 background-color: #ffffff;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:disabled {{
                 background-color: #27272a;
                 color: #71717a;
-            }
-            QPushButton#Secondary {
+            }}
+            QPushButton#Secondary {{
                 background-color: #18181b;
                 color: #e4e4e7;
                 border: 1px solid #27272a;
                 font-weight: 500;
-            }
-            QPushButton#Secondary:hover {
+                min-height: 22px;
+            }}
+            QPushButton#Secondary:hover {{
                 background-color: #27272a;
                 color: #ffffff;
-            }
-            QProgressBar {
+                border: 1px solid #3f3f46;
+            }}
+            QProgressBar {{
                 border: 1px solid #27272a;
                 border-radius: 4px;
                 background-color: #18181b;
                 max-height: 6px;
                 text-align: center;
-            }
-            QProgressBar::chunk {
-                background-color: #e4e4e7;
+            }}
+            QProgressBar::chunk {{
+                background-color: #38bdf8;
                 border-radius: 3px;
-            }
+            }}
         """)
         self._build_ui()
         self._refresh_ollama()
@@ -185,6 +231,7 @@ class SetupWindow(QWidget):
         l1.addWidget(t1)
 
         self.bg_combo = QComboBox()
+        self.bg_combo.setMinimumHeight(32)
         self.bg_combo.addItem("u2netp  —  Ultra-fast (~4.7 MB, <50ms latency)", "u2netp")
         self.bg_combo.addItem("isnet-general-use  —  High precision (~170 MB, fine edges)", "isnet-general-use")
         idx = self.bg_combo.findData(self.config.bg_removal_model)
@@ -202,12 +249,15 @@ class SetupWindow(QWidget):
         row_llm = QHBoxLayout()
         self.ollama_combo = QComboBox()
         self.ollama_combo.setEditable(True)
+        self.ollama_combo.setMinimumHeight(32)
         row_llm.addWidget(self.ollama_combo, stretch=1)
 
         ref_btn = QPushButton(" Refresh")
         ref_btn.setObjectName("Secondary")
         ref_btn.setIcon(get_icon("refresh", "#e4e4e7", 13))
         ref_btn.setIconSize(QSize(13, 13))
+        ref_btn.setMinimumHeight(32)
+        ref_btn.setFixedWidth(96)
         ref_btn.clicked.connect(self._refresh_ollama)
         row_llm.addWidget(ref_btn)
         l2.addLayout(row_llm)
@@ -225,6 +275,7 @@ class SetupWindow(QWidget):
 
         pref_row = QHBoxLayout()
         self.lang_combo = QComboBox()
+        self.lang_combo.setMinimumHeight(32)
         self.lang_combo.addItem("Target Language: Tiếng Việt (vi)", "vi")
         self.lang_combo.addItem("Target Language: English (en)", "en")
         l_idx = self.lang_combo.findData(self.config.target_language)
@@ -233,6 +284,7 @@ class SetupWindow(QWidget):
         pref_row.addWidget(self.lang_combo)
 
         self.engine_combo = QComboBox()
+        self.engine_combo.setMinimumHeight(32)
         self.engine_combo.addItem("Web Search: Google", "google")
         self.engine_combo.addItem("Web Search: DuckDuckGo", "duckduckgo")
         self.engine_combo.addItem("Web Search: Bing", "bing")
@@ -259,15 +311,17 @@ class SetupWindow(QWidget):
         l4.addWidget(self.status_lbl)
 
         act_row = QHBoxLayout()
-        self.warmup_btn = QPushButton(" Download & Warmup Models")
+        self.warmup_btn = QPushButton(" Download && Warmup Models")
         self.warmup_btn.setIcon(get_icon("download", "#e4e4e7", 13))
         self.warmup_btn.setObjectName("Secondary")
+        self.warmup_btn.setMinimumHeight(36)
         self.warmup_btn.clicked.connect(self._start_warmup)
         act_row.addWidget(self.warmup_btn)
 
-        self.install_btn = QPushButton(" Install App & Systemd Service")
+        self.install_btn = QPushButton(" Install App && Systemd Service")
         self.install_btn.setIcon(get_icon("settings", "#e4e4e7", 13))
         self.install_btn.setObjectName("Secondary")
+        self.install_btn.setMinimumHeight(36)
         self.install_btn.clicked.connect(self._install_desktop_app)
         act_row.addWidget(self.install_btn)
         l4.addLayout(act_row)
@@ -280,10 +334,12 @@ class SetupWindow(QWidget):
         footer.addStretch()
         close_btn = QPushButton("Cancel")
         close_btn.setObjectName("Secondary")
+        close_btn.setMinimumHeight(32)
         close_btn.clicked.connect(self.close)
         footer.addWidget(close_btn)
 
         save_btn = QPushButton("Save Changes")
+        save_btn.setMinimumHeight(32)
         save_btn.clicked.connect(self._save_and_close)
         footer.addWidget(save_btn)
         root.addLayout(footer)
