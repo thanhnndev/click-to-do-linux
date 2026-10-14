@@ -30,22 +30,42 @@ def install_system_integration() -> tuple[bool, str]:
     try:
         bin_path = get_executable_path()
 
-        # 1. Install Scalable SVG Icon & PNG Icons
-        icon_dir = Path.home() / ".local" / "share" / "icons" / "hicolor" / "scalable" / "apps"
-        icon_dir.mkdir(parents=True, exist_ok=True)
-        icon_file = icon_dir / "click-to-do.svg"
+        # 1. Install Scalable SVG Icon & PNG Icons across all standard resolutions
+        hicolor_dir = Path.home() / ".local" / "share" / "icons" / "hicolor"
+        assets_dir = Path(__file__).resolve().parent.parent.parent / "assets"
 
-        project_svg = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.svg"
+        # Scalable SVG
+        scalable_dir = hicolor_dir / "scalable" / "apps"
+        scalable_dir.mkdir(parents=True, exist_ok=True)
+        icon_file = scalable_dir / "click-to-do.svg"
+        project_svg = assets_dir / "icon.svg"
         if project_svg.exists():
             shutil.copy2(project_svg, icon_file)
         else:
             icon_file.write_text(get_svg_xml("app_logo", "#38bdf8", 64), encoding="utf-8")
 
-        png_dir = Path.home() / ".local" / "share" / "icons" / "hicolor" / "512x512" / "apps"
-        png_dir.mkdir(parents=True, exist_ok=True)
-        project_png = Path(__file__).resolve().parent.parent.parent / "assets" / "icon.png"
-        if project_png.exists():
-            shutil.copy2(project_png, png_dir / "click-to-do.png")
+        # Multi-resolution PNGs (16x16 up to 512x512)
+        for sz in (16, 24, 32, 48, 64, 128, 256, 512):
+            sz_dir = hicolor_dir / f"{sz}x{sz}" / "apps"
+            sz_dir.mkdir(parents=True, exist_ok=True)
+            sz_src = assets_dir / f"icon-{sz}.png"
+            if sz_src.exists():
+                shutil.copy2(sz_src, sz_dir / "click-to-do.png")
+            elif (assets_dir / "icon.png").exists():
+                shutil.copy2(assets_dir / "icon.png", sz_dir / "click-to-do.png")
+
+        # Fallback Pixmaps and user root icon folders
+        pixmaps_dir = Path.home() / ".local" / "share" / "pixmaps"
+        pixmaps_dir.mkdir(parents=True, exist_ok=True)
+        if (assets_dir / "icon.png").exists():
+            shutil.copy2(assets_dir / "icon.png", pixmaps_dir / "click-to-do.png")
+            shutil.copy2(assets_dir / "icon.png", Path.home() / ".local" / "share" / "icons" / "click-to-do.png")
+        if (assets_dir / "icon.svg").exists():
+            shutil.copy2(assets_dir / "icon.svg", pixmaps_dir / "click-to-do.svg")
+            shutil.copy2(assets_dir / "icon.svg", Path.home() / ".local" / "share" / "icons" / "click-to-do.svg")
+
+        # Rebuild GTK Icon Theme cache so DEs/DMS reload immediately
+        subprocess.run(["gtk-update-icon-cache", "-f", "-t", str(hicolor_dir)], check=False)
 
         # 2. Install Desktop Entries (Main App + Settings App + Hidden Overlay ID)
         apps_dir = Path.home() / ".local" / "share" / "applications"
@@ -61,6 +81,7 @@ def install_system_integration() -> tuple[bool, str]:
             f"Exec={bin_path} capture\n"
             f"Icon=click-to-do\n"
             f"Terminal=false\n"
+            f"StartupWMClass=click-to-do-overlay\n"
             f"Categories=Utility;Graphics;\n"
             f"Actions=Settings;Daemon;\n\n"
             f"[Desktop Action Settings]\n"
@@ -82,6 +103,7 @@ def install_system_integration() -> tuple[bool, str]:
             f"Exec={bin_path} settings\n"
             f"Icon=click-to-do\n"
             f"Terminal=false\n"
+            f"StartupWMClass=click-to-do-settings\n"
             f"Categories=Utility;Settings;Graphics;\n",
             encoding="utf-8",
         )

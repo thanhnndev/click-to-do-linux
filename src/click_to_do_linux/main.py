@@ -6,13 +6,14 @@ import sys
 
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.services.debug=false;qt.qpa.services.warning=false"
 
-from PyQt6.QtGui import QGuiApplication
+from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtWidgets import QApplication
 
 from .capture.screen import ScreenCapture
 from .config import load_config
 from .daemon import APP_ID, ClickToDoDaemon, print_bar_status_json, send_command_to_daemon
 from .installer import install_system_integration
+from .ui.icons import get_icon
 from .ui.overlay import OverlayWindow
 from .ui.setup_window import SetupWindow
 
@@ -24,10 +25,13 @@ def run_capture(color_mode: bool = False):
 
     QGuiApplication.setDesktopFileName(APP_ID)
     app = QApplication.instance() or QApplication(sys.argv)
+    icon = QIcon.fromTheme("click-to-do", get_icon("app_logo", "#38bdf8", 32))
+    app.setWindowIcon(icon)
 
     cfg = load_config()
     if not cfg.setup_completed:
         win = SetupWindow()
+        win.setWindowIcon(icon)
         win.show()
         sys.exit(app.exec())
 
@@ -45,9 +49,12 @@ def run_capture(color_mode: bool = False):
 def run_settings():
     if send_command_to_daemon("settings"):
         return
-    QGuiApplication.setDesktopFileName(APP_ID)
+    QGuiApplication.setDesktopFileName("click-to-do-settings")
     app = QApplication.instance() or QApplication(sys.argv)
+    icon = QIcon.fromTheme("click-to-do", get_icon("app_logo", "#38bdf8", 32))
+    app.setWindowIcon(icon)
     win = SetupWindow()
+    win.setWindowIcon(icon)
     win.show()
     sys.exit(app.exec())
 

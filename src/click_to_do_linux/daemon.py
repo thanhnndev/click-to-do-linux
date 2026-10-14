@@ -7,7 +7,7 @@ import sys
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.services.debug=false;qt.qpa.services.warning=false"
 
 from PyQt6.QtCore import QTimer
-from PyQt6.QtGui import QAction, QGuiApplication
+from PyQt6.QtGui import QAction, QGuiApplication, QIcon
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -49,7 +49,9 @@ class ClickToDoDaemon:
         print(f"[Daemon] Ready & Bar Icon active ({SOCKET_NAME})")
 
     def _init_bar_tray_icon(self):
-        self.tray = QSystemTrayIcon(get_icon("app_logo", "#38bdf8", 22), self.app)
+        icon = QIcon.fromTheme("click-to-do", get_icon("app_logo", "#38bdf8", 22))
+        self.app.setWindowIcon(icon)
+        self.tray = QSystemTrayIcon(icon, self.app)
         self.tray.setToolTip("Click to Do — Left-click: Capture | Right-click: Menu")
 
         menu = QMenu()
@@ -139,6 +141,7 @@ class ClickToDoDaemon:
             self.settings_win.raise_()
             return
         self.settings_win = SetupWindow()
+        self.settings_win.setWindowIcon(QIcon.fromTheme("click-to-do", get_icon("app_logo", "#38bdf8", 32)))
         self.settings_win.show()
 
     def _on_overlay_closed(self):
