@@ -1,29 +1,20 @@
-"""Fullscreen Interactive Overlay Canvas for Click to Do Linux."""
+"""Zero-Scroll Niri Floating Overlay with Live Screen Search, Color Picker, and Rich Click-to-Do UX."""
 
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 from PIL import Image
-from PyQt6.QtCore import QPoint, QRect, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import (
     QBrush,
     QColor,
-    QCursor,
     QFont,
-    QGuiApplication,
     QKeySequence,
     QPainter,
     QPen,
-    QPixmap,
     QShortcut,
 )
-from PyQt6.QtWidgets import (
-    QApplication,
-    QFileDialog,
-    QLabel,
-    QWidget,
-)
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QToolButton, QWidget
 
 from ..ai.entities import EntityDetector, QREntity
 from ..ai.llm import LLMService
@@ -31,230 +22,393 @@ from ..ai.ocr import OCREngine, TextBox
 from ..ai.segmentation import SegmentationEngine
 from ..capture.screen import CapturedScreen
 from ..config import Config, load_config
-from ..hardware import HardwareDetector, HardwareReport
 from ..utils.clipboard import ClipboardManager
 from .action_bar import ActionBar
 from .ai_dialog import AIDialog
+from .icons import get_icon
 from .theme import GLASS_STYLE
 
 
 class OCRWorker(QThread):
-    finished = pyqtSignal(list)
+    finished = pyqtSignal(list, list)
 
-    def __init__(self, image: Image.Image):
+    def __init__(self, image: Image.Image, scale_factor: float, detect_qr: bool = True):
         super().__init__()
+        self.image = image
+        self.scale_factor = scale_factor
+        self.detect_qr = detect_qr
+
+    def run(self):
+        qr_list = []
+        if self.detect_qr:
+            qr_list = EntityDetector.detect_qr_codes(self.image, self.scale_factor)
+        boxes = OCREngine.get_instance().detect(self.image, self.scale_factor)
+        self.finished.emit(boxes, qr_list)
+
+
+class ImageTaskWorker(QThread):
+    finished = pyqtSignal(str, object)
+
+    def __init__(self, task_name: str, image: Image.Image):
+        super().__init__()
+        self.task_name = task_name
         self.image = image
 
     def run(self):
-        try:
-            boxes = OCREngine.get_instance().detect(self.image)
-            self.finished.emit(boxes)
-        except Exception as e:
-            print(f"[OCRWorker] Error: {e}")
-            self.finished.emit([])
+        if self.task_name == "remove_bg":
+            res = SegmentationEngine.remove_background(self.image)
+        else:
+            res = SegmentationEngine.blur_background(self.image)
+        self.finished.emit(self.task_name, res)
 
 
 class OverlayWindow(QWidget):
-    """Main interactive screen overlay."""
+    closed = pyqtSignal()
 
     def __init__(self, captured: CapturedScreen):
         super().__init__()
         self.setObjectName("OverlayRoot")
+        self.setWindowTitle("Click to Do")
         self.setStyleSheet(GLASS_STYLE)
 
         self.captured = captured
         self.config: Config = load_config()
-        self.hw_report: HardwareReport = HardwareDetector.detect()
 
         self.ocr_boxes: List[TextBox] = []
         self.qr_entities: List[QREntity] = []
+        self.redacted_patches: List[Tuple[QRect, Image.Image]] = []
 
-        # Selection state
         self.selection_start: Optional[QPoint] = None
         self.selection_end: Optional[QPoint] = None
         self.selected_rect: Optional[QRect] = None
         self.hovered_box: Optional[TextBox] = None
-        self.selected_box: Optional[TextBox] = None
+        self.selected_boxes: List[TextBox] = []
+        self.search_query: str = ""
         self.is_dragging = False
+        self.color_picker_active = False
+        self.cursor_pos = QPoint(0, 0)
+        self.img_worker: Optional[ImageTaskWorker] = None
 
         self._setup_window()
         self._init_widgets()
-        self._detect_entities_and_ocr()
+        self._start_ocr()
 
     def _setup_window(self):
-        # Configure frameless fullscreen
+        # IMPORTANT FOR NIRI: We use a regular top-level frameless window with fixed geometry
+        # matched to Niri's floating rule (x=0, y=0) instead of showFullScreen() so Niri NEVER scrolls columns!
         self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
+            Qt.WindowType.Window
+            | Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.BypassWindowManagerHint
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setFixedSize(self.captured.logical_w, self.captured.logical_h)
         self.setCursor(Qt.CursorShape.CrossCursor)
         self.setMouseTracking(True)
 
-        # Cover entire screen
-        screen_geo = QGuiApplication.primaryScreen().geometry()
-        self.setGeometry(0, 0, self.captured.width, self.captured.height)
-
-        # Hotkeys
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.close)
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self._on_escape)
         QShortcut(QKeySequence("Ctrl+C"), self, self._handle_copy_shortcut)
+        QShortcut(QKeySequence("Ctrl+F"), self, self._toggle_search_bar)
+
+    def show_exact_overlay(self):
+        """Shows as a stationary floating layer at (0,0) without triggering Niri fullscreen column scroll."""
+        if self.captured.qt_screen:
+            self.setScreen(self.captured.qt_screen)
+            self.move(0, 0)
+        self.show()
+        self.activateWindow()
+        self.raise_()
 
     def _init_widgets(self):
-        # Top-right Hardware Badge
-        self.hw_badge = QLabel(self)
-        self.hw_badge.setObjectName("HardwareBadge")
-        self.hw_badge.setText(f"{self.hw_report.badge_text}  •  Click to Do")
-        self.hw_badge.adjustSize()
-        self.hw_badge.move(self.width() - self.hw_badge.width() - 24, 20)
+        # Top compact Search & Quick Tool Bar (hidden unless Ctrl+F or top hover)
+        self.top_bar = QFrame(self)
+        self.top_bar.setObjectName("SearchBar")
+        top_layout = QHBoxLayout(self.top_bar)
+        top_layout.setContentsMargins(8, 5, 8, 5)
+        top_layout.setSpacing(6)
 
-        # Bottom Hint Label
-        self.hint_label = QLabel(self)
-        self.hint_label.setObjectName("HintLabel")
-        self.hint_label.setText("💡 Kéo để chọn vùng • Bấm chữ để chọn • Esc để thoát")
-        self.hint_label.adjustSize()
-        self.hint_label.move((self.width() - self.hint_label.width()) // 2, self.height() - 48)
+        self.search_input = QLineEdit(self.top_bar)
+        self.search_input.setObjectName("QuickInput")
+        self.search_input.setPlaceholderText("Find text on screen (Ctrl+F)...")
+        self.search_input.setFixedWidth(220)
+        self.search_input.textChanged.connect(self._on_search_changed)
+        top_layout.addWidget(self.search_input)
 
-        # Floating Action Bar
+        self.color_btn = QToolButton(self.top_bar)
+        self.color_btn.setText(" Pick Color")
+        self.color_btn.setIcon(get_icon("pipette", "#e4e4e7", 14))
+        self.color_btn.setIconSize(QSize(14, 14))
+        self.color_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.color_btn.clicked.connect(self._toggle_color_picker)
+        top_layout.addWidget(self.color_btn)
+
+        self.copy_all_btn = QToolButton(self.top_bar)
+        self.copy_all_btn.setText(" Copy All Text")
+        self.copy_all_btn.setIcon(get_icon("text", "#e4e4e7", 14))
+        self.copy_all_btn.setIconSize(QSize(14, 14))
+        self.copy_all_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.copy_all_btn.clicked.connect(self._copy_all_screen_text)
+        top_layout.addWidget(self.copy_all_btn)
+
+        self.top_bar.adjustSize()
+        self.top_bar.move((self.captured.logical_w - self.top_bar.width()) // 2, 14)
+
         self.action_bar = ActionBar(self)
         self.action_bar.action_triggered.connect(self._on_action_triggered)
         self.action_bar.hide()
+        self.ai_dialog: Optional[AIDialog] = None
 
-        # Active AI Dialog
-        self.ai_dialog = None
+    def _on_escape(self):
+        if self.color_picker_active:
+            self.color_picker_active = False
+            self.setCursor(Qt.CursorShape.CrossCursor)
+            self.update()
+            return
+        if self.search_input.hasFocus() and self.search_query:
+            self.search_input.clear()
+            self.setFocus()
+            return
+        self.close()
 
-    def _detect_entities_and_ocr(self):
-        # 1. Fast QR Detection
-        if self.config.auto_detect_qr:
-            self.qr_entities = EntityDetector.detect_qr_codes(self.captured.image)
+    def _toggle_search_bar(self):
+        self.top_bar.show()
+        self.search_input.setFocus()
+        self.search_input.selectAll()
 
-        # 2. Async OCR
-        self.ocr_worker = OCRWorker(self.captured.image)
+    def _on_search_changed(self, text: str):
+        self.search_query = text.strip().lower()
+        self.update()
+
+    def _toggle_color_picker(self):
+        self.color_picker_active = not self.color_picker_active
+        self.action_bar.hide()
+        self.update()
+
+    def _copy_all_screen_text(self):
+        if self.ocr_boxes:
+            full_text = "\n".join(b.text for b in self.ocr_boxes)
+            ClipboardManager.copy_text(full_text)
+            self.close()
+
+    def _start_ocr(self):
+        self.ocr_worker = OCRWorker(
+            self.captured.image,
+            scale_factor=self.captured.scale_factor,
+            detect_qr=self.config.auto_detect_qr,
+        )
         self.ocr_worker.finished.connect(self._on_ocr_finished)
         self.ocr_worker.start()
 
-    def _on_ocr_finished(self, boxes: List[TextBox]):
+    def _on_ocr_finished(self, boxes: List[TextBox], qr_list: List[QREntity]):
         self.ocr_boxes = boxes
+        self.qr_entities = qr_list
         self.update()
-
-    # --- Mouse & Drawing Events ---
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
-        # 1. Draw captured screen
-        painter.drawPixmap(0, 0, self.captured.pixmap)
+        # 1. Draw frozen screen
+        target_rect = QRectF(0, 0, self.width(), self.height())
+        source_rect = QRectF(0, 0, self.captured.physical_w, self.captured.physical_h)
+        painter.drawPixmap(target_rect, self.captured.pixmap, source_rect)
 
-        # 2. Draw subtle dark freeze backdrop
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 40))
+        # 2. Subtle dimming backdrop
+        painter.fillRect(self.rect(), QColor(9, 9, 12, 60))
 
-        # 3. Draw OCR text highlights (subtle boxes)
+        # 3. Draw OCR text highlights
         for box in self.ocr_boxes:
             bx, by, bw, bh = box.rect
-            if box == self.hovered_box or box == self.selected_box:
-                # Active/hovered glow
-                painter.setPen(QPen(QColor(56, 189, 248, 220), 2))
-                painter.setBrush(QBrush(QColor(56, 189, 248, 55)))
+            is_search_match = bool(self.search_query and self.search_query in box.text.lower())
+
+            if is_search_match:
+                painter.setPen(QPen(QColor(250, 204, 21, 255), 2))
+                painter.setBrush(QBrush(QColor(250, 204, 21, 75)))
                 painter.drawRoundedRect(bx - 2, by - 2, bw + 4, bh + 4, 4, 4)
+            elif box in self.selected_boxes:
+                painter.setPen(QPen(QColor(56, 189, 248, 240), 1.6))
+                painter.setBrush(QBrush(QColor(56, 189, 248, 50)))
+                painter.drawRoundedRect(bx - 2, by - 1, bw + 4, bh + 2, 4, 4)
+            elif box == self.hovered_box:
+                painter.setPen(QPen(QColor(255, 255, 255, 180), 1.2))
+                painter.setBrush(QBrush(QColor(255, 255, 255, 28)))
+                painter.drawRoundedRect(bx - 2, by - 1, bw + 4, bh + 2, 4, 4)
             else:
-                # Faint text presence indicator
-                painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
-                painter.setBrush(QBrush(QColor(255, 255, 255, 12)))
+                painter.setPen(QPen(QColor(255, 255, 255, 26), 1))
+                painter.setBrush(QBrush(QColor(255, 255, 255, 8)))
                 painter.drawRoundedRect(bx, by, bw, bh, 3, 3)
 
-        # 4. Draw QR Code boxes
+        # 4. Draw QR boxes
         for qr in self.qr_entities:
             qx, qy, qw, qh = qr.rect
-            painter.setPen(QPen(QColor(168, 85, 247, 240), 2))
-            painter.setBrush(QBrush(QColor(168, 85, 247, 45)))
-            painter.drawRoundedRect(qx, qy, qw, qh, 6, 6)
+            painter.setPen(QPen(QColor(56, 189, 248, 220), 1.5))
+            painter.setBrush(QBrush(QColor(56, 189, 248, 35)))
+            painter.drawRoundedRect(qx, qy, qw, qh, 5, 5)
 
-        # 5. Draw active selection rectangle
-        if self.selected_rect and not self.selected_rect.isNull():
+        # 5. Draw drag selection
+        if self.selected_rect and not self.selected_rect.isNull() and not self.selected_boxes:
             rect = self.selected_rect.normalized()
-
-            # Cutout original clear image in selection area (no dark tint)
-            painter.drawPixmap(rect, self.captured.pixmap, rect)
-
-            # Draw glowing selection border
-            painter.setPen(QPen(QColor(56, 189, 248, 255), 2))
+            scale_x = self.captured.physical_w / float(max(1, self.width()))
+            scale_y = self.captured.physical_h / float(max(1, self.height()))
+            src = QRectF(
+                rect.x() * scale_x,
+                rect.y() * scale_y,
+                rect.width() * scale_x,
+                rect.height() * scale_y,
+            )
+            painter.drawPixmap(QRectF(rect), self.captured.pixmap, src)
+            painter.setPen(QPen(QColor(255, 255, 255, 220), 1.2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(rect, 4, 4)
 
-            # Draw dimensions label (e.g. 640 x 360)
-            dim_text = f"{rect.width()} × {rect.height()}"
-            painter.setFont(QFont("sans-serif", 10, QFont.Weight.Medium))
-            painter.setPen(QPen(QColor(255, 255, 255, 220)))
-            painter.drawText(rect.x() + 6, max(20, rect.y() - 6), dim_text)
+        # 6. Draw Color Picker Loupe if active
+        if self.color_picker_active:
+            self._draw_color_loupe(painter)
+
+    def _get_pixel_hex_at(self, pos: QPoint) -> Tuple[str, QColor]:
+        px = min(self.captured.image.width - 1, max(0, int(pos.x() * self.captured.scale_factor)))
+        py = min(self.captured.image.height - 1, max(0, int(pos.y() * self.captured.scale_factor)))
+        r, g, b = self.captured.image.getpixel((px, py))[:3]
+        hex_code = f"#{r:02X}{g:02X}{b:02X}"
+        return hex_code, QColor(r, g, b)
+
+    def _draw_color_loupe(self, painter: QPainter):
+        hex_code, qcol = self._get_pixel_hex_at(self.cursor_pos)
+        bx = min(self.width() - 120, self.cursor_pos.x() + 18)
+        by = max(20, self.cursor_pos.y() - 36)
+
+        pill = QRect(bx, by, 104, 30)
+        painter.setPen(QPen(QColor(255, 255, 255, 45), 1))
+        painter.setBrush(QBrush(QColor(20, 20, 25, 240)))
+        painter.drawRoundedRect(pill, 7, 7)
+
+        swatch = QRect(bx + 7, by + 6, 18, 18)
+        painter.setPen(QPen(QColor(255, 255, 255, 120), 1))
+        painter.setBrush(QBrush(qcol))
+        painter.drawRoundedRect(swatch, 4, 4)
+
+        painter.setPen(QColor("#f4f4f5"))
+        painter.setFont(QFont("monospace", 10, QFont.Weight.Bold))
+        painter.drawText(bx + 32, by + 20, hex_code)
+
+    def mouseDoubleClickEvent(self, event):
+        """Double-click any text box to immediately copy it and close overlay."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = event.pos()
+            box = OCREngine.find_box_at(self.ocr_boxes, pos.x(), pos.y())
+            if box:
+                ClipboardManager.copy_text(box.text)
+                self.close()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
             self.close()
             return
 
+        # Middle click anywhere copies the pixel HEX color immediately
+        if event.button() == Qt.MouseButton.MiddleButton:
+            hex_code, _ = self._get_pixel_hex_at(event.pos())
+            ClipboardManager.copy_text(hex_code)
+            self.close()
+            return
+
         if event.button() == Qt.MouseButton.LeftButton:
             pos = event.pos()
-            
-            # Check if clicked on QR Code
-            for qr in self.qr_entities:
-                qx, qy, qw, qh = qr.rect
-                if QRect(qx, qy, qw, qh).contains(pos):
-                    self.action_bar.show_for_qr(qr.text, qr.is_url)
-                    self.action_bar.reposition((qx, qy, qw, qh), self.width(), self.height())
-                    return
-
-            # Check if clicked directly on an OCR text box
-            box = OCREngine.find_box_at(self.ocr_boxes, pos.x(), pos.y())
-            if box:
-                self.selected_box = box
-                self.selected_rect = QRect(box.rect[0], box.rect[1], box.rect[2], box.rect[3])
-                self._show_actions_for_text(box.text, box.rect)
-                self.update()
+            if self.color_picker_active:
+                hex_code, _ = self._get_pixel_hex_at(pos)
+                ClipboardManager.copy_text(hex_code)
+                self.close()
                 return
 
-            # Start drag-to-select
-            self.is_dragging = True
             self.selection_start = pos
             self.selection_end = pos
-            self.selected_rect = QRect(pos, pos)
-            self.selected_box = None
-            self.action_bar.hide()
-            self.update()
+            self.is_dragging = False
 
     def mouseMoveEvent(self, event):
         pos = event.pos()
-        if self.is_dragging:
-            self.selection_end = pos
-            self.selected_rect = QRect(self.selection_start, self.selection_end).normalized()
+        self.cursor_pos = pos
+
+        if self.color_picker_active:
             self.update()
-        else:
-            # Check hover over text boxes
-            new_hover = OCREngine.find_box_at(self.ocr_boxes, pos.x(), pos.y())
-            if new_hover != self.hovered_box:
-                self.hovered_box = new_hover
+            return
+
+        if event.buttons() & Qt.MouseButton.LeftButton and self.selection_start:
+            if (pos - self.selection_start).manhattanLength() > 5:
+                self.is_dragging = True
+                self.selected_boxes.clear()
+                self.action_bar.hide()
+                self.selection_end = pos
+                self.selected_rect = QRect(self.selection_start, self.selection_end).normalized()
                 self.update()
+            return
+
+        new_hover = OCREngine.find_box_at(self.ocr_boxes, pos.x(), pos.y())
+        if new_hover != self.hovered_box:
+            self.hovered_box = new_hover
+            self.setCursor(
+                Qt.CursorShape.IBeamCursor if new_hover else Qt.CursorShape.CrossCursor
+            )
+            self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.is_dragging:
+        if event.button() != Qt.MouseButton.LeftButton or self.color_picker_active:
+            return
+
+        pos = event.pos()
+
+        # 1. Drag Selection
+        if self.is_dragging and self.selected_rect:
             self.is_dragging = False
-            if self.selected_rect and (self.selected_rect.width() > 10 and self.selected_rect.height() > 10):
-                rect = self.selected_rect.normalized()
+            rect = self.selected_rect.normalized()
+            if rect.width() > 8 and rect.height() > 8:
                 r_tuple = (rect.x(), rect.y(), rect.width(), rect.height())
-
-                # Check if there is text inside the selection
-                text_inside = OCREngine.get_text_in_selection(
-                    self.ocr_boxes, rect.x(), rect.y(), rect.width(), rect.height()
-                )
-
-                if text_inside and len(text_inside.strip()) > 3:
-                    # Show Text actions
+                text_inside = OCREngine.get_text_in_selection(self.ocr_boxes, *r_tuple)
+                modifiers = event.modifiers()
+                # If Shift is held during drag, force Text mode; otherwise show Image bar (with Copy Text button if text exists)
+                if (modifiers & Qt.KeyboardModifier.ShiftModifier) and text_inside:
                     self._show_actions_for_text(text_inside, r_tuple)
                 else:
-                    # Show Image actions
-                    crop_img = SegmentationEngine.crop_region(self.captured.image, r_tuple)
-                    self.action_bar.show_for_image(crop_img)
+                    crop = SegmentationEngine.crop_logical_region(
+                        self.captured.image, r_tuple, self.captured.scale_factor
+                    )
+                    self.action_bar.show_for_image(crop, text_inside=text_inside)
                     self.action_bar.reposition(r_tuple, self.width(), self.height())
+            self.update()
+            return
+
+        # 2. Direct Click on QR
+        for qr in self.qr_entities:
+            qx, qy, qw, qh = qr.rect
+            if QRect(qx, qy, qw, qh).contains(pos):
+                self.action_bar.show_for_qr(qr.text, qr.is_url)
+                self.action_bar.reposition(qr.rect, self.width(), self.height())
+                return
+
+        # 3. Direct Click (or Shift+Click multi-select) on Text Box
+        box = OCREngine.find_box_at(self.ocr_boxes, pos.x(), pos.y())
+        if box:
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                if box in self.selected_boxes:
+                    self.selected_boxes.remove(box)
+                else:
+                    self.selected_boxes.append(box)
+            else:
+                self.selected_boxes = [box]
+
+            if self.selected_boxes:
+                combined_text = "\n".join(b.text for b in self.selected_boxes)
+                min_x = min(b.rect[0] for b in self.selected_boxes)
+                min_y = min(b.rect[1] for b in self.selected_boxes)
+                max_x = max(b.rect[0] + b.rect[2] for b in self.selected_boxes)
+                max_y = max(b.rect[1] + b.rect[3] for b in self.selected_boxes)
+                union_rect = (min_x, min_y, max_x - min_x, max_y - min_y)
+                self.selected_rect = QRect(*union_rect)
+                self._show_actions_for_text(combined_text, union_rect)
+            self.update()
+        else:
+            self.selected_boxes.clear()
+            self.selected_rect = None
+            self.action_bar.hide()
             self.update()
 
     def _show_actions_for_text(self, text: str, rect_tuple: Tuple[int, int, int, int]):
@@ -264,98 +418,86 @@ class OverlayWindow(QWidget):
         self.action_bar.reposition(rect_tuple, self.width(), self.height())
 
     def _handle_copy_shortcut(self):
-        if self.selected_box:
-            ClipboardManager.copy_text(self.selected_box.text)
+        if self.selected_boxes:
+            ClipboardManager.copy_text("\n".join(b.text for b in self.selected_boxes))
             self.close()
         elif self.selected_rect and not self.selected_rect.isNull():
             rect = self.selected_rect.normalized()
             r_tuple = (rect.x(), rect.y(), rect.width(), rect.height())
-            text = OCREngine.get_text_in_selection(self.ocr_boxes, *r_tuple)
-            if text:
-                ClipboardManager.copy_text(text)
-            else:
-                crop = SegmentationEngine.crop_region(self.captured.image, r_tuple)
-                ClipboardManager.copy_image(crop)
+            crop = SegmentationEngine.crop_logical_region(
+                self.captured.image, r_tuple, self.captured.scale_factor
+            )
+            ClipboardManager.copy_image(crop)
             self.close()
-
-    # --- Action Bar Handler ---
 
     def _on_action_triggered(self, action_name: str, payload):
         if action_name == "copy_text":
             ClipboardManager.copy_text(str(payload))
             self.close()
-
         elif action_name == "copy_image":
             ClipboardManager.copy_image(payload)
             self.close()
-
+        elif action_name == "redact_region":
+            redacted = SegmentationEngine.pixelate_image(payload)
+            ClipboardManager.copy_image(redacted)
+            self.close()
         elif action_name == "open_url":
             EntityDetector.open_url(str(payload))
             self.close()
-
         elif action_name == "open_email":
             EntityDetector.open_email(str(payload))
             self.close()
-
         elif action_name == "search_web":
             EntityDetector.search_web(str(payload), engine=self.config.search_engine)
             self.close()
-
-        elif action_name == "remove_bg":
-            # Cutout subject (Windows 11 Copilot+ feature)
-            cutout = SegmentationEngine.remove_background(payload)
-            if cutout:
-                ClipboardManager.copy_image(cutout)
-                # Also save copy if configured
-                save_dir = Path(self.config.save_directory)
-                save_dir.mkdir(parents=True, exist_ok=True)
-                fn = save_dir / f"cutout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                cutout.save(fn)
-            self.close()
-
-        elif action_name == "blur_bg":
-            blurred = SegmentationEngine.blur_background(payload)
-            if blurred:
-                ClipboardManager.copy_image(blurred)
-            self.close()
-
-        elif action_name == "visual_search":
-            EntityDetector.visual_search_google_lens("")
-            self.close()
-
+        elif action_name in ("remove_bg", "blur_bg"):
+            self.img_worker = ImageTaskWorker(action_name, payload)
+            self.img_worker.finished.connect(self._on_image_task_done)
+            self.img_worker.start()
         elif action_name == "save_image":
             save_dir = Path(self.config.save_directory)
             save_dir.mkdir(parents=True, exist_ok=True)
             fn = save_dir / f"capture_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
             payload.save(fn)
             self.close()
-
-        # AI Assistant Actions
         elif action_name.startswith("ai_"):
             llm = LLMService(host=self.config.ollama_host, model=self.config.ollama_model)
-            text = str(payload)
-
-            if action_name == "ai_summarize":
-                gen = lambda: llm.summarize(text, lang=self.config.target_language)
-                title = "Tóm tắt nội dung"
-            elif action_name == "ai_explain":
-                gen = lambda: llm.explain(text, lang=self.config.target_language)
-                title = "Giải thích"
-            elif action_name == "ai_translate":
-                gen = lambda: llm.translate(text, target_lang=self.config.target_language)
-                title = "Dịch văn bản"
-            elif action_name == "ai_rewrite":
-                gen = lambda: llm.rewrite(text)
-                title = "Viết lại câu"
+            if action_name == "ai_custom":
+                ctx_text, question = payload
+                title = f"AI: {question[:28]}"
+                gen = lambda: llm.custom_ask(ctx_text, question, lang=self.config.target_language)
             else:
-                return
+                text = str(payload)
+                tasks = {
+                    "ai_summarize": ("Summarize", lambda: llm.summarize(text, lang=self.config.target_language)),
+                    "ai_explain": ("Explain", lambda: llm.explain(text, lang=self.config.target_language)),
+                    "ai_translate": ("Translate", lambda: llm.translate(text, target_lang=self.config.target_language)),
+                    "ai_rewrite": ("Rewrite", lambda: llm.rewrite(text)),
+                }
+                if action_name not in tasks:
+                    return
+                title, gen = tasks[action_name]
 
             if self.ai_dialog:
                 self.ai_dialog.deleteLater()
-
             self.ai_dialog = AIDialog(title, gen, self)
-            # Center dialog on screen
-            cx = (self.width() - self.ai_dialog.width()) // 2
-            cy = (self.height() - self.ai_dialog.height()) // 2
-            self.ai_dialog.move(cx, cy)
+            self.ai_dialog.move(
+                (self.width() - self.ai_dialog.width()) // 2,
+                (self.height() - self.ai_dialog.height()) // 2,
+            )
             self.ai_dialog.show()
+            self.ai_dialog.raise_()
+
+    def _on_image_task_done(self, task_name: str, result_img):
+        if result_img:
+            ClipboardManager.copy_image(result_img)
+            if task_name == "remove_bg":
+                save_dir = Path(self.config.save_directory)
+                save_dir.mkdir(parents=True, exist_ok=True)
+                fn = save_dir / f"cutout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                result_img.save(fn)
+        self.close()
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        super().closeEvent(event)

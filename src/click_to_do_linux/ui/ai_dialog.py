@@ -1,7 +1,6 @@
-"""AI Response Dialog with asynchronous streaming output."""
+"""Clean, minimal AI Streaming Panel without emojis."""
 
-from typing import Generator
-from PyQt6.QtCore import QPoint, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -12,8 +11,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
 from ..utils.clipboard import ClipboardManager
+from .icons import get_icon
 
 
 class StreamWorker(QThread):
@@ -35,81 +34,57 @@ class StreamWorker(QThread):
 
 
 class AIDialog(QFrame):
-    """Floating dialog for displaying AI responses (Summarize, Explain, Translate)."""
-
     def __init__(self, title: str, generator_func, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("AiDialog")
-        self.setFixedSize(540, 360)
+        self.setFixedSize(500, 320)
         self.setWindowFlags(Qt.WindowType.SubWindow | Qt.WindowType.FramelessWindowHint)
 
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(16, 14, 16, 14)
-        self.layout.setSpacing(10)
+        self.layout.setContentsMargins(14, 12, 14, 12)
+        self.layout.setSpacing(8)
 
-        # Header
-        header_layout = QHBoxLayout()
-        self.title_label = QLabel(f"🤖 {title}")
-        self.title_label.setStyleSheet("color: #c084fc; font-weight: 700; font-size: 14px;")
-        header_layout.addWidget(self.title_label)
+        header = QHBoxLayout()
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet("color: #f4f4f5; font-weight: 600; font-size: 13px;")
+        header.addWidget(self.title_label)
+        header.addStretch()
 
-        header_layout.addStretch()
-
-        self.status_label = QLabel("Đang xử lý...")
-        self.status_label.setStyleSheet("color: #94a3b8; font-size: 11px;")
-        header_layout.addWidget(self.status_label)
+        self.status_label = QLabel("Generating...")
+        self.status_label.setStyleSheet("color: #71717a; font-size: 11px;")
+        header.addWidget(self.status_label)
 
         self.close_btn = QToolButton()
-        self.close_btn.setText("✕")
-        self.close_btn.setStyleSheet("color: #94a3b8; font-size: 14px; padding: 2px 6px;")
+        self.close_btn.setIcon(get_icon("close", "#a1a1aa", 14))
+        self.close_btn.setIconSize(QSize(14, 14))
         self.close_btn.clicked.connect(self.hide)
-        header_layout.addWidget(self.close_btn)
+        header.addWidget(self.close_btn)
+        self.layout.addLayout(header)
 
-        self.layout.addLayout(header_layout)
-
-        # Text output area
         self.text_browser = QTextBrowser()
         self.text_browser.setObjectName("AiTextOutput")
         self.layout.addWidget(self.text_browser)
 
-        # Footer
-        footer_layout = QHBoxLayout()
-        self.copy_btn = QPushButton("📋 Sao chép kết quả")
+        footer = QHBoxLayout()
+        self.copy_btn = QPushButton(" Copy")
+        self.copy_btn.setIcon(get_icon("copy", "#ffffff", 13))
         self.copy_btn.setStyleSheet("""
             QPushButton {
-                background-color: #7c3aed;
-                color: white;
-                border-radius: 8px;
-                padding: 6px 14px;
+                background-color: rgba(255, 255, 255, 0.12);
+                color: #ffffff;
+                border: none;
+                border-radius: 6px;
+                padding: 5px 12px;
+                font-size: 12px;
                 font-weight: 500;
             }
-            QPushButton:hover {
-                background-color: #6d28d9;
-            }
+            QPushButton:hover { background-color: rgba(255, 255, 255, 0.20); }
         """)
         self.copy_btn.clicked.connect(self._copy_result)
-        footer_layout.addWidget(self.copy_btn)
+        footer.addWidget(self.copy_btn)
+        footer.addStretch()
+        self.layout.addLayout(footer)
 
-        footer_layout.addStretch()
-
-        self.done_btn = QPushButton("Xong")
-        self.done_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255, 255, 255, 0.1);
-                color: white;
-                border-radius: 8px;
-                padding: 6px 14px;
-            }
-            QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.18);
-            }
-        """)
-        self.done_btn.clicked.connect(self.hide)
-        footer_layout.addWidget(self.done_btn)
-
-        self.layout.addLayout(footer_layout)
-
-        # Start stream worker
         self.worker = StreamWorker(generator_func)
         self.worker.chunk_received.connect(self._on_chunk)
         self.worker.finished.connect(self._on_finished)
@@ -122,16 +97,15 @@ class AIDialog(QFrame):
         self.text_browser.moveCursor(self.text_browser.textCursor().MoveOperation.End)
 
     def _on_finished(self):
-        self.status_label.setText("Hoàn thành ✓")
-        self.status_label.setStyleSheet("color: #4ade80; font-size: 11px;")
+        self.status_label.setText("Done")
 
     def _on_error(self, err: str):
-        self.status_label.setText("Lỗi")
-        self.status_label.setStyleSheet("color: #f87171; font-size: 11px;")
-        self.text_browser.insertPlainText(f"\n[Lỗi: {err}\nVui lòng kiểm tra lại dịch vụ Ollama.]")
+        self.status_label.setText("Error")
+        self.text_browser.insertPlainText(f"\n[Error: {err}]")
 
     def _copy_result(self):
         text = self.text_browser.toPlainText()
         if text:
             ClipboardManager.copy_text(text)
-            self.copy_btn.setText("✓ Đã sao chép")
+            self.copy_btn.setText(" Copied")
+            self.copy_btn.setIcon(get_icon("check", "#4ade80", 13))

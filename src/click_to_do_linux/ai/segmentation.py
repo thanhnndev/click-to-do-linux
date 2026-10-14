@@ -1,65 +1,62 @@
-"""Image segmentation and background manipulation module (Cutout, Blur, Erase)."""
+"""Subject cutout, background blur, and privacy pixelation/redaction engine."""
 
 from typing import Optional
-import numpy as np
 from PIL import Image, ImageFilter
+from ..config import load_config
 
 
 class SegmentationEngine:
-    """Provides subject isolation, background removal, and blur."""
-
     _session = None
+    _current_model = None
 
     @classmethod
-    def _get_session(cls):
-        if cls._session is None:
-            try:
-                import rembg
-                # Default session uses ONNX Runtime with available accelerator
-                cls._session = rembg.new_session("isnet-general-use")
-            except Exception as e:
-                print(f"[SegmentationEngine] Error initializing rembg session: {e}")
-                import rembg
-                cls._session = rembg.new_session()
+    def get_session(cls, model_name: Optional[str] = None):
+        if model_name is None:
+            model_name = load_config().bg_removal_model
+        if cls._session is None or cls._current_model != model_name:
+            import rembg
+            cls._session = rembg.new_session(model_name)
+            cls._current_model = model_name
         return cls._session
 
     @classmethod
     def remove_background(cls, image: Image.Image) -> Optional[Image.Image]:
-        """Removes the background from the image, returning a transparent RGBA image."""
         try:
             import rembg
-            session = cls._get_session()
-            output = rembg.remove(image, session=session)
-            return output
+            session = cls.get_session()
+            return rembg.remove(image, session=session)
         except Exception as e:
-            print(f"[SegmentationEngine] Background removal failed: {e}")
+            print(f"[SegmentationEngine] Cutout error: {e}")
             return None
 
     @classmethod
-    def blur_background(cls, image: Image.Image, blur_radius: int = 15) -> Optional[Image.Image]:
-        """Blurs the background while keeping the detected subject sharp."""
+    def blur_background(cls, image: Image.Image, blur_radius: int = 16) -> Optional[Image.Image]:
         try:
-            # 1. Get transparent cutout of subject
             cutout = cls.remove_background(image)
             if cutout is None:
                 return image.filter(ImageFilter.GaussianBlur(blur_radius))
-
-            # 2. Blur the original image
             blurred_bg = image.convert("RGBA").filter(ImageFilter.GaussianBlur(blur_radius))
-
-            # 3. Alpha composite the sharp cutout over the blurred background
-            combined = Image.alpha_composite(blurred_bg, cutout.convert("RGBA"))
-            return combined.convert("RGB")
+            return Image.alpha_composite(blurred_bg, cutout.convert("RGBA")).convert("RGB")
         except Exception as e:
-            print(f"[SegmentationEngine] Background blur failed: {e}")
+            print(f"[SegmentationEngine] Blur error: {e}")
             return None
 
     @classmethod
-    def crop_region(cls, image: Image.Image, rect: tuple[int, int, int, int]) -> Image.Image:
-        """Crops an (x, y, w, h) region from the image safely."""
-        x, y, w, h = rect
-        x = max(0, min(image.width - 1, x))
-        y = max(0, min(image.height - 1, y))
-        x2 = max(x + 1, min(image.width, x + w))
-        y2 = max(y + 1, min(image.height, y + h))
-        return image.crop((x, y, x2, y2))
+    def pixelate_image(cls, image: Image.Image, pixel_size: int = 14) -> Image.Image:
+        """Pixelates/redacts sensitive region."""
+        w, h = image.size
+        small_w = max(1, w // pixel_size)
+        small_h = max(1, h // pixel_size)
+        small = image.resize((small_w, small_h), Image.Resampling.BILINEAR)
+        return small.resize((w, h), Image.Resampling.NEAREST)
+
+    @classmethod
+    def crop_logical_region(
+        cls, image: Image.Image, logical_rect: tuple[int, int, int, int], scale: float
+    ) -> Image.Image:
+        lx, ly, lw, lh = logical_rect
+        x1 = max(0, int(lx * scale))
+        y1 = max(0, int(ly * scale))
+        x2 = min(image.width, int((lx + lw) * scale))
+        y2 = min(image.height, int((ly + lh) * scale))
+        return image.crop((x1, y1, max(x1 + 1, x2), max(y1 + 1, y2)))

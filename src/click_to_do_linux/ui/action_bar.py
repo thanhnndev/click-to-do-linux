@@ -1,178 +1,216 @@
-"""Floating Pill Action Bar for Click to Do Linux."""
+"""Rich, minimalist Windows 11 Click to Do Context Pill Bar with inline Ask AI."""
 
-from typing import Callable, Optional
-from PyQt6.QtCore import QPoint, Qt, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
+    QLineEdit,
     QMenu,
     QToolButton,
+    QVBoxLayout,
     QWidget,
 )
+from .icons import get_icon
 
 
 class ActionBar(QFrame):
-    """Contextual floating pill toolbar offering actions for text, images, or QR codes."""
-
-    # Signals
-    action_triggered = pyqtSignal(str, object)  # action_name, payload
+    action_triggered = pyqtSignal(str, object)
 
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("ActionBar")
-        self.setWindowFlags(Qt.WindowType.SubWindow | Qt.WindowType.FramelessWindowHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(6, 5, 6, 5)
+        self.main_layout.setSpacing(5)
 
-        self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(8, 6, 8, 6)
-        self.layout.setSpacing(6)
+        self.row_layout = QHBoxLayout()
+        self.row_layout.setContentsMargins(0, 0, 0, 0)
+        self.row_layout.setSpacing(4)
+        self.main_layout.addLayout(self.row_layout)
 
-        self.current_mode = None
-        self.current_data = None
+        # Inline Ask AI input bar (hidden until user clicks 'Ask')
+        self.ask_row = QWidget(self)
+        ask_layout = QHBoxLayout(self.ask_row)
+        ask_layout.setContentsMargins(2, 2, 2, 2)
+        ask_layout.setSpacing(4)
+        self.ask_input = QLineEdit(self.ask_row)
+        self.ask_input.setObjectName("QuickInput")
+        self.ask_input.setPlaceholderText("Ask AI about selection...")
+        self.ask_input.setMinimumWidth(240)
+        self.ask_input.returnPressed.connect(self._submit_custom_ask)
+        ask_layout.addWidget(self.ask_input)
+
+        send_btn = QToolButton(self.ask_row)
+        send_btn.setIcon(get_icon("send", "#38bdf8", 14))
+        send_btn.setIconSize(QSize(14, 14))
+        send_btn.clicked.connect(self._submit_custom_ask)
+        ask_layout.addWidget(send_btn)
+        self.ask_row.hide()
+        self.main_layout.addWidget(self.ask_row)
+
+        self._current_text = ""
 
     def clear_actions(self):
-        while self.layout.count():
-            item = self.layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
+        self.ask_row.hide()
+        self.ask_input.clear()
+        while self.row_layout.count():
+            item = self.row_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+    def _add_divider(self):
+        div = QFrame(self)
+        div.setObjectName("PillDivider")
+        self.row_layout.addWidget(div)
+
+    def _make_btn(self, text: str, icon_name: str, obj_name: str = "", icon_color: str = "#e4e4e7") -> QToolButton:
+        btn = QToolButton(self)
+        btn.setText(f" {text}" if text else "")
+        btn.setIcon(get_icon(icon_name, color=icon_color, size=14))
+        btn.setIconSize(QSize(14, 14))
+        btn.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon if text else Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
+        if obj_name:
+            btn.setObjectName(obj_name)
+        return btn
 
     def show_for_text(self, text: str, urls: list[str] = None, emails: list[str] = None):
-        """Builds action pill for text selection."""
         self.clear_actions()
-        self.current_mode = "text"
-        self.current_data = text
+        self._current_text = text
 
-        # 1. Copy button
-        copy_btn = QToolButton(self)
-        copy_btn.setText("📋 Sao chép")
-        copy_btn.setObjectName("PrimaryAction")
+        # 1. Copy
+        copy_btn = self._make_btn("Copy", "copy", "PrimaryAction", "#ffffff")
         copy_btn.clicked.connect(lambda: self.action_triggered.emit("copy_text", text))
-        self.layout.addWidget(copy_btn)
+        self.row_layout.addWidget(copy_btn)
 
-        # 2. Open URL button (if text has URL)
+        # 2. Direct Translate (1-click most used action)
+        trans_btn = self._make_btn("Translate", "translate", "AiAction", "#38bdf8")
+        trans_btn.clicked.connect(lambda: self.action_triggered.emit("ai_translate", text))
+        self.row_layout.addWidget(trans_btn)
+
+        # 3. Direct Explain / Summarize
+        exp_btn = self._make_btn("Explain", "sparkles")
+        exp_btn.clicked.connect(lambda: self.action_triggered.emit("ai_explain", text))
+        self.row_layout.addWidget(exp_btn)
+
+        # 4. Ask AI custom prompt
+        ask_btn = self._make_btn("Ask", "send")
+        ask_btn.clicked.connect(self._toggle_ask_input)
+        self.row_layout.addWidget(ask_btn)
+
+        self._add_divider()
+
+        # 5. Smart Entity Actions (URL / Mail / Search)
         if urls:
-            url_btn = QToolButton(self)
-            url_btn.setText("🌐 Mở liên kết")
+            url_btn = self._make_btn("Open Link", "link")
             url_btn.clicked.connect(lambda: self.action_triggered.emit("open_url", urls[0]))
-            self.layout.addWidget(url_btn)
+            self.row_layout.addWidget(url_btn)
 
-        # 3. Email button (if email)
         if emails:
-            email_btn = QToolButton(self)
-            email_btn.setText("✉️ Gửi Email")
+            email_btn = self._make_btn("Email", "mail")
             email_btn.clicked.connect(lambda: self.action_triggered.emit("open_email", emails[0]))
-            self.layout.addWidget(email_btn)
+            self.row_layout.addWidget(email_btn)
 
-        # 4. Search Web button
-        search_btn = QToolButton(self)
-        search_btn.setText("🔍 Tìm kiếm")
+        search_btn = self._make_btn("Search", "search")
         search_btn.clicked.connect(lambda: self.action_triggered.emit("search_web", text))
-        self.layout.addWidget(search_btn)
+        self.row_layout.addWidget(search_btn)
 
-        # 5. AI Assistant Dropdown Menu
-        ai_btn = QToolButton(self)
-        ai_btn.setText("🤖 Trợ lý AI ▾")
-        ai_btn.setObjectName("AiAction")
-        
+        # 6. More AI Menu
+        more_btn = QToolButton(self)
+        more_btn.setText("▾")
         ai_menu = QMenu(self)
-        
-        act_sum = ai_menu.addAction("📝 Tóm tắt nội dung")
-        act_sum.triggered.connect(lambda: self.action_triggered.emit("ai_summarize", text))
-
-        act_exp = ai_menu.addAction("💡 Giải thích nội dung / mã")
-        act_exp.triggered.connect(lambda: self.action_triggered.emit("ai_explain", text))
-
-        act_trans = ai_menu.addAction("🌐 Dịch sang Tiếng Việt")
-        act_trans.triggered.connect(lambda: self.action_triggered.emit("ai_translate", text))
-
-        act_rew = ai_menu.addAction("✨ Viết lại & trau chuốt câu")
-        act_rew.triggered.connect(lambda: self.action_triggered.emit("ai_rewrite", text))
-
-        ai_btn.setMenu(ai_menu)
-        ai_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.layout.addWidget(ai_btn)
+        ai_menu.addAction("Summarize", lambda: self.action_triggered.emit("ai_summarize", text))
+        ai_menu.addAction("Rewrite / Polish", lambda: self.action_triggered.emit("ai_rewrite", text))
+        more_btn.setMenu(ai_menu)
+        more_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.row_layout.addWidget(more_btn)
 
         self.adjustSize()
         self.show()
+        self.raise_()
 
-    def show_for_image(self, crop_image):
-        """Builds action pill for image / crop selection."""
+    def _toggle_ask_input(self):
+        if self.ask_row.isVisible():
+            self.ask_row.hide()
+        else:
+            self.ask_row.show()
+            self.ask_input.setFocus()
+        self.adjustSize()
+
+    def _submit_custom_ask(self):
+        q = self.ask_input.text().strip()
+        if q and self._current_text:
+            self.action_triggered.emit("ai_custom", (self._current_text, q))
+
+    def show_for_image(self, crop_image, text_inside: str = ""):
         self.clear_actions()
-        self.current_mode = "image"
-        self.current_data = crop_image
 
-        # 1. Copy Image
-        copy_btn = QToolButton(self)
-        copy_btn.setText("📋 Sao chép ảnh")
-        copy_btn.setObjectName("PrimaryAction")
+        copy_btn = self._make_btn("Copy", "copy", "PrimaryAction", "#ffffff")
         copy_btn.clicked.connect(lambda: self.action_triggered.emit("copy_image", crop_image))
-        self.layout.addWidget(copy_btn)
+        self.row_layout.addWidget(copy_btn)
 
-        # 2. Cutout / Remove Background (Signature Windows 11 Copilot+ feature)
-        rmbg_btn = QToolButton(self)
-        rmbg_btn.setText("✂️ Tách nền (NPU/AI)")
-        rmbg_btn.setObjectName("AiAction")
-        rmbg_btn.clicked.connect(lambda: self.action_triggered.emit("remove_bg", crop_image))
-        self.layout.addWidget(rmbg_btn)
+        rmbg_btn = self._make_btn("Cutout", "cutout", "AiAction", "#38bdf8")
+        rmbg_btn.clicked.connect(lambda: self._emit_async(rmbg_btn, "Cutting...", "remove_bg", crop_image))
+        self.row_layout.addWidget(rmbg_btn)
 
-        # 3. Blur Background
-        blur_btn = QToolButton(self)
-        blur_btn.setText("🌫️ Làm mờ nền")
-        blur_btn.clicked.connect(lambda: self.action_triggered.emit("blur_bg", crop_image))
-        self.layout.addWidget(blur_btn)
+        blur_btn = self._make_btn("Blur BG", "blur")
+        blur_btn.clicked.connect(lambda: self._emit_async(blur_btn, "Blurring...", "blur_bg", crop_image))
+        self.row_layout.addWidget(blur_btn)
 
-        # 4. Visual Search (Google Lens)
-        lens_btn = QToolButton(self)
-        lens_btn.setText("🔍 Tìm ảnh")
-        lens_btn.clicked.connect(lambda: self.action_triggered.emit("visual_search", crop_image))
-        self.layout.addWidget(lens_btn)
+        redact_btn = self._make_btn("Redact", "redact")
+        redact_btn.clicked.connect(lambda: self.action_triggered.emit("redact_region", crop_image))
+        self.row_layout.addWidget(redact_btn)
 
-        # 5. Save to File
-        save_btn = QToolButton(self)
-        save_btn.setText("💾 Lưu file")
+        if text_inside:
+            self._add_divider()
+            ocr_btn = self._make_btn("Copy Text", "text")
+            ocr_btn.clicked.connect(lambda: self.action_triggered.emit("copy_text", text_inside))
+            self.row_layout.addWidget(ocr_btn)
+
+        self._add_divider()
+
+        save_btn = self._make_btn("Save", "save")
         save_btn.clicked.connect(lambda: self.action_triggered.emit("save_image", crop_image))
-        self.layout.addWidget(save_btn)
+        self.row_layout.addWidget(save_btn)
 
         self.adjustSize()
         self.show()
+        self.raise_()
+
+    def _emit_async(self, btn: QToolButton, busy_label: str, action: str, payload):
+        btn.setText(f" {busy_label}")
+        btn.setEnabled(False)
+        self.adjustSize()
+        self.action_triggered.emit(action, payload)
 
     def show_for_qr(self, qr_text: str, is_url: bool):
-        """Builds action pill for detected QR Code."""
         self.clear_actions()
-        self.current_mode = "qr"
-        self.current_data = qr_text
-
         if is_url:
-            open_btn = QToolButton(self)
-            open_btn.setText("🌐 Mở liên kết QR")
-            open_btn.setObjectName("PrimaryAction")
+            open_btn = self._make_btn("Open Link", "link", "PrimaryAction", "#ffffff")
             open_btn.clicked.connect(lambda: self.action_triggered.emit("open_url", qr_text))
-            self.layout.addWidget(open_btn)
+            self.row_layout.addWidget(open_btn)
 
-        copy_btn = QToolButton(self)
-        copy_btn.setText("📋 Sao chép nội dung QR")
+        copy_btn = self._make_btn("Copy QR", "copy")
         copy_btn.clicked.connect(lambda: self.action_triggered.emit("copy_text", qr_text))
-        self.layout.addWidget(copy_btn)
+        self.row_layout.addWidget(copy_btn)
 
         self.adjustSize()
         self.show()
+        self.raise_()
 
     def reposition(self, anchor_rect: tuple[int, int, int, int], screen_w: int, screen_h: int):
-        """Positions the floating action bar relative to anchor rectangle."""
         rx, ry, rw, rh = anchor_rect
-        bar_w = self.width() or 300
-        bar_h = self.height() or 45
+        bar_w = self.width() or 320
+        bar_h = self.height() or 40
 
-        # Place horizontally centered with anchor rect
         x = rx + (rw - bar_w) // 2
         x = max(10, min(screen_w - bar_w - 10, x))
 
-        # Try placing directly below anchor rect
-        y = ry + rh + 12
-        if y + bar_h > screen_h - 10:
-            # Place directly above anchor rect
-            y = ry - bar_h - 12
+        y = ry + rh + 8
+        if y + bar_h > screen_h - 12:
+            y = ry - bar_h - 8
         y = max(10, min(screen_h - bar_h - 10, y))
 
         self.move(int(x), int(y))

@@ -1,113 +1,112 @@
-"""Modern Fluent / Glassmorphism theme styles for Click to Do Linux."""
+"""Sleek Windows 11 Acrylic / Obsidian dark theme."""
 
 GLASS_STYLE = """
-/* Main Overlay Canvas */
 QWidget#OverlayRoot {
     background-color: transparent;
+    font-family: "Inter", "Noto Sans", system-ui, sans-serif;
 }
 
-/* Floating Action Bar Pill */
-QFrame#ActionBar {
-    background-color: rgba(24, 25, 30, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 14px;
+/* Floating Pill Toolbar */
+QFrame#ActionBar, QFrame#SearchBar {
+    background-color: rgba(20, 20, 24, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
 }
 
-/* Action Buttons */
+QLineEdit#QuickInput {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 6px;
+    padding: 4px 10px;
+    color: #f4f4f5;
+    font-size: 12px;
+}
+
+QLineEdit#QuickInput:focus {
+    border: 1px solid rgba(56, 189, 248, 0.55);
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
 QToolButton {
     background-color: transparent;
-    color: #f0f0f4;
+    color: #e4e4e7;
     border: none;
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 13px;
+    border-radius: 6px;
+    padding: 5px 9px;
+    font-size: 12px;
     font-weight: 500;
 }
 
 QToolButton:hover {
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.10);
     color: #ffffff;
 }
 
 QToolButton:pressed {
-    background-color: rgba(255, 255, 255, 0.20);
+    background-color: rgba(255, 255, 255, 0.16);
 }
 
-/* Primary Highlight Button */
 QToolButton#PrimaryAction {
-    background-color: #0078d4;
+    background-color: rgba(255, 255, 255, 0.14);
     color: #ffffff;
-}
-
-QToolButton#PrimaryAction:hover {
-    background-color: #1084d8;
-}
-
-/* AI Action Submenu Button */
-QToolButton#AiAction {
-    background-color: rgba(147, 51, 234, 0.25);
-    border: 1px solid rgba(168, 85, 247, 0.4);
-    color: #e9d5ff;
-}
-
-QToolButton#AiAction:hover {
-    background-color: rgba(147, 51, 234, 0.45);
-    color: #ffffff;
-}
-
-/* Top Hardware Badge */
-QLabel#HardwareBadge {
-    background-color: rgba(15, 20, 25, 0.88);
-    color: #38bdf8;
-    border: 1px solid rgba(56, 189, 248, 0.35);
-    border-radius: 12px;
-    padding: 6px 14px;
-    font-size: 12px;
     font-weight: 600;
 }
 
-/* Hint Label */
-QLabel#HintLabel {
-    background-color: rgba(15, 20, 25, 0.75);
-    color: #94a3b8;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    padding: 4px 10px;
-    font-size: 11px;
+QToolButton#PrimaryAction:hover {
+    background-color: rgba(255, 255, 255, 0.22);
 }
 
-/* AI Response Modal */
+QToolButton#AiAction {
+    color: #38bdf8;
+    background-color: rgba(56, 189, 248, 0.10);
+}
+
+QToolButton#AiAction:hover {
+    background-color: rgba(56, 189, 248, 0.20);
+    color: #7dd3fc;
+}
+
+/* Divider line inside pill bar */
+QFrame#PillDivider {
+    background-color: rgba(255, 255, 255, 0.12);
+    max-width: 1px;
+    min-width: 1px;
+    margin: 4px 2px;
+}
+
+/* AI Output Panel */
 QFrame#AiDialog {
-    background-color: rgba(20, 22, 28, 0.98);
-    border: 1px solid rgba(168, 85, 247, 0.5);
-    border-radius: 16px;
+    background-color: rgba(18, 18, 22, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
 }
 
 QTextBrowser#AiTextOutput {
-    background-color: rgba(12, 14, 18, 0.7);
-    color: #f1f5f9;
+    background-color: rgba(10, 10, 14, 0.90);
+    color: #e4e4e7;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    padding: 12px;
+    border-radius: 8px;
+    padding: 10px;
     font-size: 13px;
-    line-height: 1.5;
 }
 
-/* Menus */
+/* Dropdown Menu */
 QMenu {
-    background-color: rgba(28, 30, 36, 0.98);
+    background-color: rgba(22, 22, 27, 0.98);
     border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 4px;
-    color: #f1f5f9;
+    color: #e4e4e7;
+    font-size: 12px;
 }
 
 QMenu::item {
-    padding: 6px 20px 6px 10px;
-    border-radius: 6px;
+    padding: 6px 18px 6px 10px;
+    border-radius: 5px;
 }
 
 QMenu::item:selected {
     background-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
 }
 """

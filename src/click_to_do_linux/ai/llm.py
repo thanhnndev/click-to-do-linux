@@ -1,4 +1,4 @@
-"""LLM Integration module using Ollama for Summarize, Explain, Translate, and Rewrite."""
+"""LLM Integration module using Ollama for Translate, Summarize, Explain, Rewrite, and Custom Prompt."""
 
 import json
 from typing import Generator, List, Optional
@@ -6,22 +6,20 @@ import requests
 
 
 class LLMService:
-    """Interacts with local Ollama or OpenAI-compatible server for intelligent text tasks."""
-
-    def __init__(self, host: str = "http://localhost:11434", model: str = "qwen2.5:latest"):
+    def __init__(self, host: str = "http://localhost:11434", model: str = "qwen2.5:3b"):
         self.host = host.rstrip("/")
         self.model = model
 
     def is_available(self) -> bool:
         try:
-            r = requests.get(f"{self.host}/api/version", timeout=1.5)
+            r = requests.get(f"{self.host}/api/version", timeout=1.2)
             return r.status_code == 200
         except Exception:
             return False
 
     def get_models(self) -> List[str]:
         try:
-            r = requests.get(f"{self.host}/api/tags", timeout=2.0)
+            r = requests.get(f"{self.host}/api/tags", timeout=1.5)
             if r.status_code == 200:
                 data = r.json()
                 return [m["name"] for m in data.get("models", [])]
@@ -31,11 +29,7 @@ class LLMService:
 
     def _generate_stream(self, prompt: str, system: Optional[str] = None) -> Generator[str, None, None]:
         url = f"{self.host}/api/generate"
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": True,
-        }
+        payload = {"model": self.model, "prompt": prompt, "stream": True}
         if system:
             payload["system"] = system
 
@@ -55,24 +49,26 @@ class LLMService:
             yield f"\n[Error: {e}]"
 
     def summarize(self, text: str, lang: str = "vi") -> Generator[str, None, None]:
-        lang_name = "tiếng Việt" if lang == "vi" else "English"
-        system = f"You are a helpful assistant. Provide a clear, concise summary in {lang_name}."
-        prompt = f"Summarize the following content concisely:\n\n{text}"
-        return self._generate_stream(prompt, system=system)
+        lang_name = "Vietnamese" if lang == "vi" else "English"
+        system = f"Provide a direct, concise bullet-point summary in {lang_name}. No intro fluff."
+        return self._generate_stream(f"Summarize:\n\n{text}", system=system)
 
     def explain(self, text: str, lang: str = "vi") -> Generator[str, None, None]:
-        lang_name = "tiếng Việt" if lang == "vi" else "English"
-        system = f"You are an expert tutor. Explain the following text or code snippet clearly in simple terms in {lang_name}."
-        prompt = f"Explain this:\n\n{text}"
-        return self._generate_stream(prompt, system=system)
+        lang_name = "Vietnamese" if lang == "vi" else "English"
+        system = f"Explain the following text, terminal command, or code clearly and concisely in {lang_name}."
+        return self._generate_stream(f"Explain:\n\n{text}", system=system)
 
     def translate(self, text: str, target_lang: str = "vi") -> Generator[str, None, None]:
-        target_name = "tiếng Việt" if target_lang == "vi" else ("English" if target_lang == "en" else target_lang)
-        system = f"You are a professional translator. Translate the given text accurately and naturally into {target_name}. Output ONLY the translated text without commentary."
-        prompt = f"Translate the following text:\n\n{text}"
-        return self._generate_stream(prompt, system=system)
+        target_name = "Vietnamese" if target_lang == "vi" else "English"
+        system = f"Translate accurately into {target_name}. Output ONLY the translation."
+        return self._generate_stream(text, system=system)
 
     def rewrite(self, text: str) -> Generator[str, None, None]:
-        system = "You are a professional editor. Improve the grammar, clarity, and tone of the given text while keeping its original meaning."
-        prompt = f"Rewrite and polish the following text:\n\n{text}"
+        system = "Improve clarity, grammar, and tone while preserving original language and meaning. Output ONLY the improved text."
+        return self._generate_stream(text, system=system)
+
+    def custom_ask(self, context_text: str, question: str, lang: str = "vi") -> Generator[str, None, None]:
+        lang_name = "Vietnamese" if lang == "vi" else "English"
+        system = f"Answer the user's question about the provided screen text directly in {lang_name}."
+        prompt = f"Context from screen:\n{context_text}\n\nQuestion: {question}"
         return self._generate_stream(prompt, system=system)

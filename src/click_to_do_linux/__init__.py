@@ -1,4 +1,4 @@
-"""Click to Do Linux - AI NPU Screen Intelligence for Linux Desktops."""
+"""Click to Do Linux - Instant Screen Intelligence Overlay for Wayland/Niri."""
 
 from .main import main
 
