@@ -8,13 +8,8 @@
   A high-speed, native-feeling port of <b>Windows 11 Click to Do</b> built for modern Wayland compositors (<b>Niri</b>, <b>Umbriel</b>, <b>Hyprland</b>, <b>Sway</b>, <b>KDE Plasma</b>, <b>GNOME</b>).
 </p>
 
-<!-- Demo GIF / Video Showcase Placeholder -->
 <p align="center">
-  <a href="assets/demo.gif">
-    <img src="assets/demo.gif" alt="Click to Do for Linux Interactive Demo" width="100%" />
-  </a>
-  <br>
-  <em>(Replace <code>assets/demo.gif</code> with your recorded walkthrough / showcase)</em>
+  <img src="assets/screenshots/02-text-actions.png" alt="Click a text line to Copy, Translate, Explain, Ask or Search" width="100%" />
 </p>
 
 Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze the screen in **< 25ms**, detect text and QR codes in the background, isolate subjects (AI Cutout), redact sensitive areas, and run local Vietnamese/English LLMs via Ollama with diacritic-accurate Vietnamese OCR.
@@ -22,11 +17,6 @@ Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze 
 ---
 
 ## Key Features
-
-<p align="center">
-  <!-- Feature showcase screenshot placeholder -->
-  <img src="assets/screenshot-features.png" alt="Interactive Text & Vision Features" width="95%" />
-</p>
 
 - **Instant Screen Freeze (< 25ms):** Streams uncompressed framebuffers directly from `grim` into RAM (`QImage` / `PIL.Image`) with zero temporary disk writes and zero PNG encoding overhead.
 - **HiDPI & Multi-Monitor Native:** Automatically maps physical framebuffer pixels to logical Wayland coordinates (1.0x, 1.5x, 2.0x fractional scaling) without offset or blurriness.
@@ -44,6 +34,26 @@ Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze 
 - **Universal Bar Quick-Action Button:**
   - **System Tray (`StatusNotifierItem`):** Automatically embeds a sleek vector icon in **Dank Material Shell**, **Umbriel**, **Waybar**, **Quickshell**, **Hyprpanel**, or **KDE** (Left-click: Capture, Middle-click: Pick Color, Right-click: Menu).
   - **Custom Bar Module (`click-to-do bar-status`):** JSON output for custom bar widgets.
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| **Live OCR overlay** — every text line is selectable (Vietnamese diacritics preserved)<br><img src="assets/screenshots/01-overlay-ocr.png" /> | **Text actions** — Copy / Translate / Explain / Ask / Search<br><img src="assets/screenshots/02-text-actions.png" /> |
+| **URL detection** — open link, copy<br><img src="assets/screenshots/03-url-actions.png" /> | **Multi-line select** with `Shift + Click`<br><img src="assets/screenshots/04-multi-select.png" /> |
+| **Image region** — Cutout, Blur BG, Redact, Save<br><img src="assets/screenshots/05-image-actions.png" /> | **QR code** detection<br><img src="assets/screenshots/06-qr.png" /> |
+| **Live screen find** (`Ctrl + F`)<br><img src="assets/screenshots/07-search.png" /> | **Color picker** with HEX loupe<br><img src="assets/screenshots/08-color-picker.png" /> |
+| **Local AI answer** via Ollama<br><img src="assets/screenshots/09-ai-dialog.png" /> | |
+
+### Settings
+
+| General & AI | Shortcuts (compositor auto-detect) | System |
+|---|---|---|
+| <img src="assets/screenshots/settings-en-1.png" /> | <img src="assets/screenshots/settings-en-2.png" /> | <img src="assets/screenshots/settings-en-3.png" /> |
+
+> Screenshots are generated on a synthetic demo backdrop (`scripts/make_screenshots.py`).
 
 ---
 

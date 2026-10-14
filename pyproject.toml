@@ -1,6 +1,6 @@
 [project]
 name = "click-to-do-linux"
-version = "0.1.0"
+version = "0.2.0"
 description = "Click to Do for Linux: instant OCR (Vietnamese-aware), subject cutout and local AI overlay for Wayland"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
