@@ -319,7 +319,7 @@ class SetupWindow(QWidget):
         ref_btn.setIcon(get_icon("refresh", "#e4e4e7", 13))
         ref_btn.setIconSize(QSize(13, 13))
         ref_btn.setMinimumHeight(32)
-        ref_btn.setFixedWidth(96)
+        ref_btn.setMinimumWidth(110)
         ref_btn.clicked.connect(self._refresh_ollama)
         row_llm.addWidget(ref_btn)
         l2.addLayout(row_llm)

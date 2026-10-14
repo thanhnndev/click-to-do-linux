@@ -40,7 +40,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     },
     "tray_capture": {"vi": "Chụp màn hình (Click to Do)", "en": "Capture Screen (Click to Do)"},
     "tray_color": {"vi": "Chọn màu trên màn hình (HEX)", "en": "Pick Screen Color (HEX)"},
-    "tray_settings": {"vi": "Cài đặt & mô hình AI cục bộ", "en": "Settings & Local Models"},
+    "tray_settings": {"vi": "Cài đặt && mô hình AI cục bộ", "en": "Settings && Local Models"},
     "tray_quit": {"vi": "Thoát dịch vụ nền", "en": "Quit Daemon"},
     # Settings
     "set_title": {"vi": "Click to Do — Cài đặt", "en": "Click to Do — Settings"},
@@ -133,7 +133,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "vi": "Click to Do for Linux — phiên bản mã nguồn mở, mô phỏng tính năng Click to Do của Windows 11 cho Wayland.\n"
         "Dự án độc lập, không liên kết với Microsoft.\n\n"
         "Giấy phép: GNU GPL v3.0 trở lên.\n"
-        "Tác giả: thanhnndev\n\n"
+        "Tác giả: thanhnndev — contact@thanhnn.dev\n"
+        "Mã nguồn: github.com/thanhnndev/click-to-do-linux\n\n"
         "Thành phần bên thứ ba:\n"
         "• RapidOCR / PaddleOCR (Apache-2.0) — phát hiện chữ\n"
         "• Tesseract OCR (Apache-2.0) — nhận dạng tiếng Việt\n"
@@ -144,7 +145,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Click to Do for Linux — open-source take on Windows 11 Click to Do for Wayland.\n"
         "Independent project, not affiliated with Microsoft.\n\n"
         "License: GNU GPL v3.0 or later.\n"
-        "Author: thanhnndev\n\n"
+        "Author: thanhnndev — contact@thanhnn.dev\n"
+        "Source: github.com/thanhnndev/click-to-do-linux\n\n"
         "Third-party components:\n"
         "• RapidOCR / PaddleOCR (Apache-2.0) — text detection\n"
         "• Tesseract OCR (Apache-2.0) — Vietnamese recognition\n"

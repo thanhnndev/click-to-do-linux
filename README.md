@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/screenshots/02-text-actions.png" alt="Click a text line to Copy, Translate, Explain, Ask or Search" width="100%" />
+  <img src="assets/demo.gif" alt="Click to Do for Linux — demo flow" width="100%" />
 </p>
 
 Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze the screen in **< 25ms**, detect text and QR codes in the background, isolate subjects (AI Cutout), redact sensitive areas, and run local Vietnamese/English LLMs via Ollama with diacritic-accurate Vietnamese OCR.
@@ -39,21 +39,36 @@ Designed with a **Resident Daemon + Zero-Disk PPM Pipe** architecture to freeze 
 
 ## Screenshots
 
-| | |
-|---|---|
-| **Live OCR overlay** — every text line is selectable (Vietnamese diacritics preserved)<br><img src="assets/screenshots/01-overlay-ocr.png" /> | **Text actions** — Copy / Translate / Explain / Ask / Search<br><img src="assets/screenshots/02-text-actions.png" /> |
-| **URL detection** — open link, copy<br><img src="assets/screenshots/03-url-actions.png" /> | **Multi-line select** with `Shift + Click`<br><img src="assets/screenshots/04-multi-select.png" /> |
-| **Image region** — Cutout, Blur BG, Redact, Save<br><img src="assets/screenshots/05-image-actions.png" /> | **QR code** detection<br><img src="assets/screenshots/06-qr.png" /> |
-| **Live screen find** (`Ctrl + F`)<br><img src="assets/screenshots/07-search.png" /> | **Color picker** with HEX loupe<br><img src="assets/screenshots/08-color-picker.png" /> |
-| **Local AI answer** via Ollama<br><img src="assets/screenshots/09-ai-dialog.png" /> | |
+<table>
+<tr>
+<td width="50%"><b>Live OCR overlay</b> — every line is selectable, Vietnamese diacritics preserved<br><img src="assets/screenshots/01-overlay-ocr.png"></td>
+<td width="50%"><b>Text actions</b> — Copy / Translate / Explain / Ask / Search<br><img src="assets/screenshots/02-text-actions.png"></td>
+</tr>
+<tr>
+<td><b>Smart entities</b> — URLs, e-mails<br><img src="assets/screenshots/03-url-actions.png"></td>
+<td><b>Multi-line select</b> with <code>Shift + Click</code><br><img src="assets/screenshots/04-multi-select.png"></td>
+</tr>
+<tr>
+<td><b>Image region</b> — Cutout, Blur BG, Redact, Save<br><img src="assets/screenshots/05-image-actions.png"></td>
+<td><b>QR codes</b> detected automatically<br><img src="assets/screenshots/06-qr.png"></td>
+</tr>
+<tr>
+<td><b>Live screen find</b> (<code>Ctrl + F</code>)<br><img src="assets/screenshots/07-search.png"></td>
+<td><b>Color picker</b> with HEX loupe<br><img src="assets/screenshots/08-color-picker.png"></td>
+</tr>
+<tr>
+<td><b>Local AI answers</b> via Ollama<br><img src="assets/screenshots/09-ai-dialog.png"></td>
+<td><b>Bar / tray quick action</b> (Niri + DMS, Umbriel, Waybar, KDE…)<br><img src="assets/screenshots/10-tray.png"></td>
+</tr>
+</table>
 
 ### Settings
 
 | General & AI | Shortcuts (compositor auto-detect) | System |
 |---|---|---|
-| <img src="assets/screenshots/settings-en-1.png" /> | <img src="assets/screenshots/settings-en-2.png" /> | <img src="assets/screenshots/settings-en-3.png" /> |
+| <img src="assets/screenshots/settings-en-1.png"> | <img src="assets/screenshots/settings-en-2.png"> | <img src="assets/screenshots/settings-en-3.png"> |
 
-> Screenshots are generated on a synthetic demo backdrop (`scripts/make_screenshots.py`).
+> Screenshots and the demo GIF are generated on a synthetic desktop by [`scripts/make_screenshots.py`](scripts/make_screenshots.py) — no private content.
 
 ---
 
@@ -266,6 +281,10 @@ If you also want a dedicated custom button module (e.g. in **Waybar** or **Umbri
 ## License
 
 Released under the **[GNU General Public License v3.0 or later](LICENSE)** (required by the PyQt6 GPL dependency).
+
+## Contact
+
+Author: **thanhnndev** — [contact@thanhnn.dev](mailto:contact@thanhnn.dev) · [Issues](https://github.com/thanhnndev/click-to-do-linux/issues)
 
 ## Credits
 

@@ -7,7 +7,7 @@ license-files = ["LICENSE"]
 keywords = ["wayland", "ocr", "ollama", "vietnamese", "click-to-do"]
 readme = "README.md"
 authors = [
-    { name = "thanhnndev", email = "thanhnn16.work@gmail.com" }
+    { name = "thanhnndev", email = "contact@thanhnn.dev" }
 ]
 requires-python = ">=3.12"
 dependencies = [
