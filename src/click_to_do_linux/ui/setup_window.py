@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..ai.llm import LLMService
+from .. import npu as npu_mod
 from ..ai.ocr import OCREngine, download_tessdata, tesseract_ready
 from ..i18n import set_lang, t
 from ..ai.segmentation import SegmentationEngine
@@ -308,6 +309,24 @@ class SetupWindow(QWidget):
         t2.setObjectName("CardTitle")
         l2.addWidget(t2)
 
+        row_be = QHBoxLayout()
+        self.backend_combo = QComboBox()
+        self.backend_combo.setMinimumHeight(32)
+        self.backend_combo.addItem(t("llm_backend_ollama"), "ollama")
+        self.backend_combo.addItem(t("llm_backend_npu"), "openai")
+        be_idx = self.backend_combo.findData(self.config.llm_backend)
+        self.backend_combo.setCurrentIndex(max(0, be_idx))
+        self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
+        row_be.addWidget(self.backend_combo, stretch=1)
+        self.keep_combo = QComboBox()
+        self.keep_combo.setMinimumHeight(32)
+        for val, lbl in (("0", t("keep_now")), ("2m", "2 min"), ("10m", "10 min"), ("-1", t("keep_never"))):
+            self.keep_combo.addItem(f"{t('llm_keepalive')}: {lbl}", val)
+        k_idx = self.keep_combo.findData(self.config.llm_keep_alive)
+        self.keep_combo.setCurrentIndex(k_idx if k_idx >= 0 else 1)
+        row_be.addWidget(self.keep_combo, stretch=1)
+        l2.addLayout(row_be)
+
         row_llm = QHBoxLayout()
         self.ollama_combo = QComboBox()
         self.ollama_combo.setEditable(True)
@@ -325,6 +344,7 @@ class SetupWindow(QWidget):
         l2.addLayout(row_llm)
 
         rec_lbl = QLabel(t("llm_hint"))
+        self.llm_hint_lbl = rec_lbl
         rec_lbl.setObjectName("Muted")
         rec_lbl.setWordWrap(True)
         l2.addWidget(rec_lbl)
@@ -436,10 +456,29 @@ class SetupWindow(QWidget):
         footer.addWidget(save_btn)
         root.addLayout(footer)
 
+    def _on_backend_changed(self):
+        npu_mode = self.backend_combo.currentData() == "openai"
+        self.keep_combo.setEnabled(not npu_mode)
+        self.llm_hint_lbl.setText(t("llm_npu_hint") if npu_mode else t("llm_hint"))
+        self.config.llm_backend = self.backend_combo.currentData()
+        self._refresh_ollama()
+
     def _refresh_ollama(self):
-        llm = LLMService(host=self.config.ollama_host)
+        llm = LLMService.from_config(self.config)
+        npu_mode = self.config.llm_backend == "openai"
+        self.keep_combo.setEnabled(not npu_mode)
+        self.llm_hint_lbl.setText(t("llm_npu_hint") if npu_mode else t("llm_hint"))
         self.ollama_combo.clear()
         installed = llm.get_models() if llm.is_available() else []
+        if self.config.llm_backend == "openai":
+            for m in installed:
+                self.ollama_combo.addItem(f"{m} ({t('installed_tag')})", m)
+            idx = self.ollama_combo.findData(self.config.openai_model)
+            if idx >= 0:
+                self.ollama_combo.setCurrentIndex(idx)
+            else:
+                self.ollama_combo.setEditText(self.config.openai_model)
+            return
 
         added = set()
         for m in installed:
@@ -521,6 +560,7 @@ class SetupWindow(QWidget):
         c = comp_mod.detect()
         llm = LLMService(host=self.config.ollama_host)
         ollama_up = shutil.which("ollama") is not None and llm.is_available()
+        npu = npu_mod.detect()
         service_on = False
         try:
             service_on = subprocess.run(
@@ -535,6 +575,14 @@ class SetupWindow(QWidget):
             row(bool(shutil.which("tesseract")), "Tesseract (OCR tiếng Việt)", t("diag_install", p="tesseract")),
             row(tesseract_ready(), t("diag_tessdata"), t("diag_tessdata_hint")),
             row(ollama_up, "Ollama", t("diag_ollama_hint")),
+            row(npu.present, f"{t('diag_npu')}: <b>{npu.name or '—'}</b> ({npu.driver or '?'})", t("diag_npu_none")),
+        ]
+        if npu.present and npu.name.startswith("AMD"):
+            rows += [
+                row(npu.flm, t("diag_flm"), t("diag_flm_hint")),
+                row(npu.memlock_ok, t("diag_memlock"), t("diag_memlock_hint")),
+            ]
+        rows += [
             row(service_on, t("diag_service"), t("diag_service_hint")),
         ]
         self.diag_lbl.setText("<br>".join(rows))
@@ -700,7 +748,12 @@ class SetupWindow(QWidget):
     def _save_config_data(self):
         self.config.ui_language = self.ui_lang_combo.currentData()
         self.config.bg_removal_model = self.bg_combo.currentData()
-        self.config.ollama_model = self._get_selected_ollama_model()
+        self.config.llm_backend = self.backend_combo.currentData()
+        self.config.llm_keep_alive = self.keep_combo.currentData()
+        if self.config.llm_backend == "openai":
+            self.config.openai_model = self._get_selected_ollama_model()
+        else:
+            self.config.ollama_model = self._get_selected_ollama_model()
         self.config.target_language = self.lang_combo.currentData()
         self.config.search_engine = self.engine_combo.currentData()
         save_config(self.config)

@@ -557,7 +557,7 @@ class OverlayWindow(QWidget):
             payload.save(fn)
             self.close()
         elif action_name.startswith("ai_"):
-            llm = LLMService(host=self.config.ollama_host, model=self.config.ollama_model)
+            llm = LLMService.from_config(self.config)
             if action_name == "ai_custom":
                 ctx_text, question = payload
                 title = f"{t('ai_ask_title')}: {question[:28]}"

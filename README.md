@@ -91,6 +91,14 @@ The compact Vietnamese/English data files (~4.6 MB, `tessdata_fast`) are downloa
 
 ---
 
+## NPU / battery-friendly mode (AMD XDNA2)
+
+The daemon is idle-cheap (no GPU use); the part that wakes a discrete GPU is the LLM. On Ryzen AI laptops you can run
+the LLM on the NPU with [FastFlowLM](https://github.com/FastFlowLM/FastFlowLM) (`pacman -S fastflowlm xrt xrt-plugin-amdxdna`,
+then `flm serve qwen3:4b`) and choose **Settings → General & AI → Run models on → NPU via FastFlowLM**.
+With Ollama you can also set **Unload model after** to `Immediately` so the dGPU sleeps right after each answer.
+Findings and open questions are in [docs/NPU.md](docs/NPU.md).
+
 ## Recommended Local Language Models (Ollama)
 
 Sizes are Ollama default downloads (q4_K_M). "Vietnamese" is a qualitative rating from the published benchmarks and model cards we could find (VMLU, translation roundups) — no single benchmark covers all of these, so test on your own text.

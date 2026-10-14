@@ -13,6 +13,12 @@ class Config:
     # Local LLM settings
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:3b"
+    # LLM backend: "ollama" (GPU/CPU) or "openai" (any OpenAI-compatible server, e.g. FastFlowLM on the NPU)
+    llm_backend: str = "ollama"
+    openai_base_url: str = "http://127.0.0.1:52625/v1"
+    openai_model: str = "qwen3:4b"
+    # How long Ollama keeps the model resident after a request ("0" = unload immediately, "-1" = forever)
+    llm_keep_alive: str = "2m"
     target_language: str = "vi"
     # UI language: "auto" (follow system locale), "vi" or "en"
     ui_language: str = "auto"
