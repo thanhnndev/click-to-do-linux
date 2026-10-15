@@ -148,9 +148,14 @@ class ActionBar(QFrame):
     def show_for_image(self, crop_image, text_inside: str = ""):
         self.clear_actions()
 
-        copy_btn = self._make_btn(t("copy"), "copy", "PrimaryAction", "#ffffff")
+        copy_btn = self._make_btn(t("copy_image"), "copy", "PrimaryAction", "#ffffff")
         copy_btn.clicked.connect(lambda: self.action_triggered.emit("copy_image", crop_image))
         self.row_layout.addWidget(copy_btn)
+
+        if text_inside:
+            text_btn = self._make_btn(t("copy_region_text"), "text", "PrimaryAction", "#ffffff")
+            text_btn.clicked.connect(lambda: self.action_triggered.emit("copy_text", text_inside))
+            self.row_layout.addWidget(text_btn)
 
         rmbg_btn = self._make_btn(t("cutout"), "cutout", "AiAction", "#38bdf8")
         rmbg_btn.clicked.connect(lambda: self._emit_async(rmbg_btn, t("cutting"), "remove_bg", crop_image))
@@ -163,12 +168,6 @@ class ActionBar(QFrame):
         redact_btn = self._make_btn(t("redact"), "redact")
         redact_btn.clicked.connect(lambda: self.action_triggered.emit("redact_region", crop_image))
         self.row_layout.addWidget(redact_btn)
-
-        if text_inside:
-            self._add_divider()
-            ocr_btn = self._make_btn(t("copy_text"), "text")
-            ocr_btn.clicked.connect(lambda: self.action_triggered.emit("copy_text", text_inside))
-            self.row_layout.addWidget(ocr_btn)
 
         self._add_divider()
 

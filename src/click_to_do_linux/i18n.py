@@ -32,6 +32,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     # Overlay
     "find_placeholder": {"vi": "Tìm chữ trên màn hình (Ctrl+F)...", "en": "Find text on screen (Ctrl+F)..."},
     "pick_color": {"vi": "Chọn màu", "en": "Pick Color"},
+    "copy_image": {"vi": "Sao chép ảnh", "en": "Copy Image"},
+    "copy_region_text": {"vi": "Sao chép toàn bộ chữ", "en": "Copy All Text"},
     "copy_all": {"vi": "Sao chép toàn bộ chữ", "en": "Copy All Text"},
     # Tray
     "tray_tooltip": {
