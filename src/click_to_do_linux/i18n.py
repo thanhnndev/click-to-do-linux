@@ -78,7 +78,9 @@ _STRINGS: dict[str, dict[str, str]] = {
     "btn_uninstall": {"vi": " Gỡ cài đặt...", "en": " Uninstall..."},
     "btn_about": {"vi": " Giới thiệu && giấy phép", "en": " About && Licenses"},
     "btn_cancel": {"vi": "Hủy", "en": "Cancel"},
-    "btn_save": {"vi": "Lưu thay đổi", "en": "Save Changes"},
+    "btn_apply": {"vi": "Áp dụng", "en": "Apply"},
+    "btn_applied": {"vi": "Đã áp dụng", "en": "Applied"},
+    "btn_save": {"vi": "Lưu và đóng", "en": "Save and Close"},
     "install_done": {"vi": "Cài đặt hoàn tất", "en": "Installation Complete"},
     "uninstall_title": {"vi": "Gỡ cài đặt Click to Do", "en": "Uninstall Click to Do"},
     "uninstall_confirm": {

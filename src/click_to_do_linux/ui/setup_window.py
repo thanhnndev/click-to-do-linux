@@ -3,7 +3,7 @@
 import shutil
 import subprocess
 from pathlib import Path
-from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -462,6 +462,12 @@ class SetupWindow(QWidget):
         close_btn.clicked.connect(self.close)
         footer.addWidget(close_btn)
 
+        self.apply_btn = QPushButton(t("btn_apply"))
+        self.apply_btn.setObjectName("Secondary")
+        self.apply_btn.setMinimumHeight(32)
+        self.apply_btn.clicked.connect(self._apply)
+        footer.addWidget(self.apply_btn)
+
         save_btn = QPushButton(t("btn_save"))
         save_btn.setMinimumHeight(32)
         save_btn.clicked.connect(self._save_and_close)
@@ -771,6 +777,13 @@ class SetupWindow(QWidget):
         self.config.target_language = self.lang_combo.currentData()
         self.config.search_engine = self.engine_combo.currentData()
         save_config(self.config)
+
+    def _apply(self):
+        """Saves the settings and keeps the window open."""
+        self.config.setup_completed = True
+        self._save_config_data()
+        self.apply_btn.setText(t("btn_applied"))
+        QTimer.singleShot(1500, lambda: self.apply_btn.setText(t("btn_apply")))
 
     def _save_and_close(self):
         self.config.setup_completed = True
