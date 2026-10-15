@@ -45,9 +45,9 @@
 
 Xem bộ ảnh đầy đủ trong [README tiếng Anh](README.md#screenshots). Ảnh được tạo trên một màn hình giả lập bằng [`scripts/make_screenshots.py`](scripts/make_screenshots.py), không chứa nội dung riêng tư.
 
-| OCR trực tiếp | Hành động với văn bản | Cài đặt |
+| OCR trực tiếp | Chọn vùng: Sao chép ảnh / toàn bộ chữ | Cài đặt (Áp dụng / Lưu và đóng) |
 |---|---|---|
-| <img src="assets/screenshots/01-overlay-ocr.png"> | <img src="assets/screenshots/02-text-actions.png"> | <img src="assets/screenshots/settings-vi-1.png"> |
+| <img src="assets/screenshots/01-overlay-ocr.png"> | <img src="assets/screenshots/11-region-copy-text.png"> | <img src="assets/screenshots/settings-vi-1.png"> |
 
 ## Cài đặt
 

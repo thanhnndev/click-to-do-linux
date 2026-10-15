@@ -58,18 +58,22 @@ Freeze the screen, make every text line selectable (with diacritic-accurate Viet
 <td><b>QR codes</b> detected automatically<br><img src="assets/screenshots/06-qr.png"></td>
 </tr>
 <tr>
+<td><b>Region select</b> — Copy Image or Copy All Text in the region<br><img src="assets/screenshots/11-region-copy-text.png"></td>
 <td><b>Live screen find</b> (<code>Ctrl + F</code>)<br><img src="assets/screenshots/07-search.png"></td>
-<td><b>Color picker</b> with HEX loupe<br><img src="assets/screenshots/08-color-picker.png"></td>
 </tr>
 <tr>
-<td><b>Local AI answers</b> via Ollama<br><img src="assets/screenshots/09-ai-dialog.png"></td>
-<td><b>Bar / tray quick action</b> (Niri + DMS, Umbriel, Waybar, KDE…)<br><img src="assets/screenshots/10-tray.png"></td>
+<td><b>Color picker</b> with HEX loupe<br><img src="assets/screenshots/08-color-picker.png"></td>
+<td><b>Local AI answers</b> via Ollama or NPU<br><img src="assets/screenshots/09-ai-dialog.png"></td>
+</tr>
+<tr>
+<td><b>Bar / tray quick action</b> (Niri + DMS, Umbriel, Waybar, KDE)<br><img src="assets/screenshots/10-tray.png"></td>
+<td></td>
 </tr>
 </table>
 
 ### Settings
 
-| General & AI | Shortcuts (compositor auto-detect) | System |
+| General & AI (Apply / Save and Close) | Shortcuts (compositor auto-detect) | System |
 |---|---|---|
 | <img src="assets/screenshots/settings-en-1.png"> | <img src="assets/screenshots/settings-en-2.png"> | <img src="assets/screenshots/settings-en-3.png"> |
 

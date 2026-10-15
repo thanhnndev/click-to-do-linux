@@ -1,7 +1,7 @@
 # Maintainer: thanhnndev <contact@thanhnn.dev>
 pkgname=click-to-do-linux-git
 _pkgname=click-to-do-linux
-pkgver=0.2.0.r0.g0000000
+pkgver=0.3.0.r0.g0000000
 pkgrel=1
 pkgdesc='Windows 11 "Click to Do" for Wayland: on-screen OCR (Vietnamese-accurate), cutout, color picker and local LLM actions'
 arch=('any')

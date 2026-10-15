@@ -18,6 +18,7 @@ os.environ["XDG_CURRENT_DESKTOP"] = "niri"
 os.environ["NIRI_SOCKET"] = "/nonexistent"
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+from click_to_do_linux.ai.ocr import OCREngine
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "assets" / "screenshots"
@@ -281,6 +282,18 @@ ov.action_bar.show_for_image(crop, text_inside="")
 ov.action_bar.reposition(rr, W, H)
 save("05-image-actions.png", crop_logical(grab(ov), [rr, abar_rect()], pad=40))
 reset()
+# drag a region over text lines: Copy Image + Copy All Text
+bs = [box("Thứ Hai"), box("Thứ Tư")]
+xs = [b.rect[0] for b in bs] + [b.rect[0] + b.rect[2] for b in bs]
+ys = [b.rect[1] for b in bs] + [b.rect[1] + b.rect[3] for b in bs]
+rt = (min(xs) - 12, min(ys) - 12, max(xs) - min(xs) + 24, max(ys) - min(ys) + 24)
+ov.selected_rect = QRect(*rt)
+region_text = OCREngine.get_text_in_selection(ov.ocr_boxes, *rt)
+crop = SegmentationEngine.crop_logical_region(cap.image, rt, cap.scale_factor)
+ov.action_bar.show_for_image(crop, text_inside=region_text)
+ov.action_bar.reposition(rt, W, H)
+save("11-region-copy-text.png", crop_logical(grab(ov), [rt, abar_rect()], pad=40))
+reset()
 q = ov.qr_entities[0]; ov.action_bar.show_for_qr(q.text, q.is_url); ov.action_bar.reposition(q.rect, W, H)
 save("06-qr.png", crop_logical(grab(ov), [q.rect, abar_rect()], pad=60))
 reset(); ov.search_input.setText("họp"); ov._toggle_search_bar(); save("07-search.png", grab(ov))
@@ -448,9 +461,9 @@ for i in range(1, 6):
     add(grab(ov), "5 · Kéo chọn vùng ảnh bất kỳ", 110, cur=p)
 rr = (p0[0], p0[1], p1[0] - p0[0], p1[1] - p0[1])
 crop = SegmentationEngine.crop_logical_region(cap.image, rr, cap.scale_factor)
-ov.action_bar.show_for_image(crop, text_inside="")
+ov.action_bar.show_for_image(crop, text_inside=OCREngine.get_text_in_selection(ov.ocr_boxes, *rr))
 ov.action_bar.reposition(rr, W, H)
-add(grab(ov), "5 · Cutout · Làm mờ nền · Che thông tin · Lưu", 1800, cur=p1)
+add(grab(ov), "5 · Sao chép ảnh hoặc toàn bộ chữ · Cutout · Làm mờ · Che · Lưu", 1800, cur=p1)
 reset()
 
 # scene 5: QR
