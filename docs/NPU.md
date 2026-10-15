@@ -132,6 +132,23 @@ So the wall time is similar, but the NPU frees the CPU cores almost entirely.
 bf16 changes the probability map slightly (IoU 0.90 on that screenshot); a full
 end-to-end accuracy comparison on many real captures has not been done.
 
+End-to-end through the app (`OCREngine.detect`, 2560x1520 synthetic capture,
+15 text lines, detection + Tesseract per line, warm, interleaved runs):
+
+| | CPU detection | NPU detection |
+|---|---|---|
+| Total time per capture | about 0.56-0.68 s | about 0.69-0.77 s |
+| Detection alone, 1536x2560 (random input) | about 561 ms | about 362 ms (includes pipe transfer) |
+| Boxes / recognized text | 15 / identical | 15 / identical |
+
+On this machine the NPU path is not faster end to end (about 0.1 s slower per
+capture, because of the tensor transfer to the worker process and the
+Tesseract stage, which still runs on the CPU). Its benefit is that detection
+leaves the CPU cores mostly idle. First start compiles three fixed-shape
+buckets (640x960, 1088x1920, 1536x2560), single-threaded each, roughly 12-17
+minutes per bucket (run in parallel by the worker); until ready the app uses
+the CPU.
+
 Install size: the Ryzen AI venv used here is about 9 GB, plus about 8 GB for
 the extracted installer.
 

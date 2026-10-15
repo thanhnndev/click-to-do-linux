@@ -67,6 +67,9 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "--compile":
         _session(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
         return
+    # Native libraries log to stdout; keep the protocol channel on a private dup.
+    proto = os.fdopen(os.dup(1), "wb", buffering=0)
+    os.dup2(2, 1)
     model, cache = sys.argv[1], sys.argv[2]
     os.makedirs(cache, exist_ok=True)
     _compile_all(model, cache)  # no-op per bucket once cached
@@ -76,9 +79,8 @@ def main() -> None:
         if s.get_providers()[0] != "VitisAIExecutionProvider":
             raise RuntimeError("VitisAI provider not active")
         sessions.append((h, w, s, s.get_inputs()[0].name))
-    out, inp = sys.stdout.buffer, sys.stdin.buffer
+    out, inp = proto, sys.stdin.buffer
     out.write(b"READY\n")
-    out.flush()
     while True:
         line = inp.readline()
         if not line:
@@ -89,7 +91,6 @@ def main() -> None:
         pick = next(((bh, bw, s, n) for bh, bw, s, n in sessions if bh >= h and bw >= w), None)
         if pick is None:
             out.write(b"0 0 0\n")
-            out.flush()
             continue
         bh, bw, s, name = pick
         if (bh, bw) != (h, w):
@@ -98,7 +99,6 @@ def main() -> None:
             x = pad
         y = s.run(None, {name: x})[0][0, 0, :h, :w].astype(np.float32)
         out.write(f"1 {h} {w}\n".encode() + np.ascontiguousarray(y).tobytes())
-        out.flush()
 
 
 if __name__ == "__main__":

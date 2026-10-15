@@ -38,8 +38,10 @@ class NPUDetector:
             self._proc = subprocess.Popen(
                 self._cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
             )
-            line = self._proc.stdout.readline()  # blocks while models compile on first run
-            self.ready = line.strip() == b"READY"
+            for line in iter(self._proc.stdout.readline, b""):  # blocks while models compile
+                if line.strip() == b"READY":
+                    self.ready = True
+                    break
         except Exception as e:
             print(f"[NPUDetector] start failed: {e}")
             self.ready = False
