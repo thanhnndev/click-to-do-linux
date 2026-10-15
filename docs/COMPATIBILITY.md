@@ -17,6 +17,15 @@ real hardware. Reports (working or broken) are welcome as issues.
 | LLM backends | Ollama (dGPU); FastFlowLM 1.0.8 on the NPU |
 | NPU text detection | Ryzen AI Software 1.8 (Linux), fixed-shape PP-OCRv6 detection |
 
+## Multi-monitor capture
+
+Capture asks the compositor for its focused output on Umbriel, Niri, Hyprland,
+Sway, and Wayfire, then passes that output to `grim`. Other compositors do not
+share a standard Wayland API for focused-output queries, so capture falls back
+to the Qt screen under the pointer, then the primary screen. It always limits
+`grim` to one output or one screen geometry; if a multi-output screen cannot be
+identified, capture stops instead of combining the desktop.
+
 ## Implemented, not tested on real hardware
 
 | Area | Items |
