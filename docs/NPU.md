@@ -70,6 +70,20 @@ Caveats — read before quoting:
 - FastFlowLM was run from its portable tarball (bundled XRT) with `ulimit -l unlimited`; first model load
   into the NPU happens at `flm serve` start and was not timed.
 
+### Unplugged re-run (battery, 3 interleaved rounds, `--runs 7 --keep-alive 0`)
+
+Same model family (Ollama `qwen2.5:3b` vs FastFlowLM `qwen2.5-it:3b`).
+
+| | Ollama (dGPU) | FastFlowLM (NPU) |
+|---|---|---|
+| dGPU power during generation (delta over idle) | about +7 to +10 W | about 0 W |
+| TTFT with immediate unload | about 2.0-2.3 s | about 0.9 s |
+| Throughput (stream chunks/s) | about 96-98 | about 23-24 |
+
+Caveat: whole-system battery draw (from battery voltage x current) varied
+41-60 W between idle baselines on this machine, so a total-system comparison is
+inconclusive; only the per-device dGPU numbers above are reliable.
+
 ## 4. Not done / open questions (unverified)
 
 - Battery discharge-rate comparison while **unplugged** (the numbers above were taken on AC).
