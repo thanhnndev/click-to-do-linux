@@ -84,6 +84,22 @@ Caveat: whole-system battery draw (from battery voltage x current) varied
 41-60 W between idle baselines on this machine, so a total-system comparison is
 inconclusive; only the per-device dGPU numbers above are reliable.
 
+### OCR on the NPU (spike, 2026-10-15)
+
+FastFlowLM `qwen3vl-it:4b` (vision-language model on the NPU) was asked to
+transcribe a synthetic 1400x430 Vietnamese/English image with 5 text lines.
+
+- Accuracy: all 5 lines exact (diacritics, punctuation, email, digits).
+- Latency: about 7.8-8.2 s per image (3 runs). The current CPU hybrid pipeline
+  measured about 0.73 s for a 2560x1520 capture with 18 lines.
+- No bounding boxes: the overlay needs per-line boxes for selecting and
+  copying text in place, which a chat-style VLM response does not provide.
+
+Conclusion: a VLM on the NPU can read text accurately but is roughly 10x slower
+and cannot replace detection. The detection model (PP-OCR DBNet, ONNX) would
+need ONNX Runtime with the VitisAI provider, which AMD distributes for Linux
+only through its download portal (Ubuntu-oriented); not tested here.
+
 ## 4. Not done / open questions (unverified)
 
 - Battery discharge-rate comparison while **unplugged** (the numbers above were taken on AC).
