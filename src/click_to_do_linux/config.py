@@ -19,6 +19,9 @@ class Config:
     openai_model: str = "qwen3:4b"
     # How long Ollama keeps the model resident after a request ("0" = unload immediately, "-1" = forever)
     llm_keep_alive: str = "2m"
+    # Text-line detection: "cpu" or "npu" (AMD XDNA2 via a Ryzen AI Software install, see docs/NPU.md)
+    ocr_det_backend: str = "cpu"
+    ryzenai_dir: str = str(Path.home() / "ryzenai")
     target_language: str = "vi"
     # UI language: "auto" (follow system locale), "vi" or "en"
     ui_language: str = "auto"

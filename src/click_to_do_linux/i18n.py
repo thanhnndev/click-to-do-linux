@@ -112,6 +112,11 @@ _STRINGS: dict[str, dict[str, str]] = {
     "diag_ollama_hint": {"vi": "chạy `ollama serve` hoặc cài Ollama", "en": "run `ollama serve` or install Ollama"},
     "llm_backend": {"vi": "Nơi chạy mô hình", "en": "Run models on"},
     "llm_backend_ollama": {"vi": "Ollama (GPU/CPU)", "en": "Ollama (GPU/CPU)"},
+    "ocr_det_cpu": {"vi": "Phát hiện chữ (OCR): CPU", "en": "Text detection (OCR): CPU"},
+    "ocr_det_npu": {
+        "vi": "Phát hiện chữ (OCR): NPU (cần AMD Ryzen AI Software, xem docs/NPU.md)",
+        "en": "Text detection (OCR): NPU (needs AMD Ryzen AI Software, see docs/NPU.md)",
+    },
     "llm_backend_npu": {"vi": "NPU qua FastFlowLM (tiết kiệm pin)", "en": "NPU via FastFlowLM (battery-friendly)"},
     "llm_keepalive": {"vi": "Giải phóng mô hình sau", "en": "Unload model after"},
     "keep_now": {"vi": "Ngay lập tức", "en": "Immediately"},

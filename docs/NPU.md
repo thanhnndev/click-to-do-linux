@@ -100,6 +100,41 @@ and cannot replace detection. The detection model (PP-OCR DBNet, ONNX) would
 need ONNX Runtime with the VitisAI provider, which AMD distributes for Linux
 only through its download portal (Ubuntu-oriented); not tested here.
 
+### Text detection on the NPU (measured, 2026-10-15)
+
+AMD's Ryzen AI Software 1.8 for Linux (ONNX Runtime 1.27 with the VitisAI
+execution provider) does run the PP-OCRv6 detection model on the XDNA2 NPU of
+this machine (Ryzen AI 9 HX 370, kernel 7.2.10, XRT 2.25).
+
+Requirements and gotchas found while getting it to run on CachyOS:
+
+- The installer (`ryzen_ai-1.8.0.tgz`, 7.8 GB) is behind an AMD account and EULA.
+- The detection model has dynamic input dims; the NPU compiler needs a static
+  shape. With dynamic dims it assigned only 3% of the model's GOPs to the NPU
+  and everything ran on the CPU. With a fixed 640x960 shape, 100% of the
+  operators (14.1 GOPs) are placed on the NPU (bf16 internally).
+- First compile of a shape takes minutes (one time; cached in `det.rai`).
+- Linux packaging quirks: the ONNX Runtime `.so` needs its executable-stack
+  flag cleared on kernels that refuse it; `libpeano`, `libvaiml2` and
+  `libflexmlrt` must be on `LD_LIBRARY_PATH`; XRT must be a 2.25 build with the
+  xdna driver (FastFlowLM's bundled `lib/` works) and `RYZEN_AI_INSTALLATION_PATH`
+  needs `lib/x86_64-linux-gnu/libxrt_core.so.2`.
+
+Measured (640x960 input, screenshot 01 of this repo, 20 runs):
+
+| | CPU (ORT, 24 threads) | NPU (VitisAI EP) |
+|---|---|---|
+| Wall time per detection | about 87-91 ms median | about 74 ms median |
+| CPU time consumed per detection | about 2039 ms | about 4 ms |
+| Output vs CPU (threshold 0.3) | - | binary IoU 0.90, mean abs diff 0.003 |
+
+So the wall time is similar, but the NPU frees the CPU cores almost entirely.
+bf16 changes the probability map slightly (IoU 0.90 on that screenshot); a full
+end-to-end accuracy comparison on many real captures has not been done.
+
+Install size: the Ryzen AI venv used here is about 9 GB, plus about 8 GB for
+the extracted installer.
+
 ## 4. Not done / open questions (unverified)
 
 - Battery discharge-rate comparison while **unplugged** (the numbers above were taken on AC).

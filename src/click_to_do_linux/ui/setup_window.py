@@ -301,6 +301,16 @@ class SetupWindow(QWidget):
         if idx >= 0:
             self.bg_combo.setCurrentIndex(idx)
         l1.addWidget(self.bg_combo)
+        # OCR text-line detection backend: the NPU choice only exists on machines with an NPU
+        if npu_mod.detect().present or self.config.ocr_det_backend == "npu":
+            self.det_combo = QComboBox()
+            self.det_combo.setMinimumHeight(32)
+            self.det_combo.addItem(t("ocr_det_cpu"), "cpu")
+            self.det_combo.addItem(t("ocr_det_npu"), "npu")
+            self.det_combo.setCurrentIndex(max(0, self.det_combo.findData(self.config.ocr_det_backend)))
+            l1.addWidget(self.det_combo)
+        else:
+            self.det_combo = None
         p_general.addWidget(c1)
 
         # Card 2: Vietnamese Local LLM (Ollama)
@@ -752,6 +762,8 @@ class SetupWindow(QWidget):
         self.config.bg_removal_model = self.bg_combo.currentData()
         self.config.llm_backend = self.backend_combo.currentData()
         self.config.llm_keep_alive = self.keep_combo.currentData()
+        if self.det_combo is not None:
+            self.config.ocr_det_backend = self.det_combo.currentData()
         if self.config.llm_backend == "openai":
             self.config.openai_model = self._get_selected_ollama_model()
         else:

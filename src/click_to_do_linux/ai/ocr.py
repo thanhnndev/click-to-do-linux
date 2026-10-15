@@ -69,6 +69,7 @@ class OCREngine:
         from rapidocr import RapidOCR
 
         self.engine = RapidOCR()
+        self._npu = None
 
     @classmethod
     def get_instance(cls) -> "OCREngine":
@@ -82,9 +83,33 @@ class OCREngine:
         inst = cls.get_instance()
         dummy = np.zeros((64, 64, 3), dtype=np.uint8)
         try:
-            inst.engine(dummy)
+            inst.engine(dummy, use_det=True, use_cls=False, use_rec=False)
         except Exception:
             pass
+        inst._maybe_attach_npu()
+
+    def _maybe_attach_npu(self) -> None:
+        """Routes text detection to the NPU when enabled; the CPU session stays as fallback."""
+        from ..config import load_config
+
+        cfg = load_config()
+        if cfg.ocr_det_backend != "npu" or self._npu is not None:
+            return
+        try:
+            from pathlib import Path
+
+            from . import npu_det
+
+            rdir = Path(cfg.ryzenai_dir)
+            det = self.engine.text_det
+            if not npu_det.available(rdir) or det is None:
+                return
+            model = str(Path(self.engine.text_det.session.session._model_path))
+            cache = Path.home() / ".cache" / "click-to-do" / "npu"
+            self._npu = npu_det.NPUDetector(rdir, model, cache)
+            det.session = npu_det.NPUSession(det.session, self._npu)
+        except Exception as e:
+            print(f"[OCREngine] NPU detection unavailable: {e}")
 
     @staticmethod
     def _tesseract_line(crop: Image.Image) -> str:
