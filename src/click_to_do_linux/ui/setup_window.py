@@ -712,9 +712,9 @@ class SetupWindow(QWidget):
         notes = []
         for key in (cap, col):
             for hit in comp_mod.find_conflicts(c, key):
-                notes.append(f"<span style='color:#fbbf24'>⚠ {t('key_conflict', k=key)}</span> <code>{hit}</code>")
+                notes.append(f"<span style='color:#fbbf24'>{t('key_conflict', k=key)}</span> <code>{hit}</code>")
         for hit in comp_mod.existing_click_to_do_binds(c):
-            notes.append(f"<span style='color:#4ade80'>✓ {t('key_existing')}</span> <code>{hit}</code>")
+            notes.append(f"<span style='color:#4ade80'>{t('key_existing')}</span> <code>{hit}</code>")
         self.key_note.setText("<br>".join(notes) or t("key_ok"))
         self.key_note.setVisible(True)
 
