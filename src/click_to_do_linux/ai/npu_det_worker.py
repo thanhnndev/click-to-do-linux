@@ -35,22 +35,44 @@ def _fix_shape(src: str, h: int, w: int, dst: str) -> None:
     onnx.save(shape_inference.infer_shapes(m), dst)
 
 
-def main() -> None:
+def _session(cache: str, h: int, w: int):
     import onnxruntime as ort
 
-    model, cache = sys.argv[1], sys.argv[2]
-    os.makedirs(cache, exist_ok=True)
-    sessions = []
+    so = ort.SessionOptions()
+    so.log_severity_level = 3
+    return ort.InferenceSession(
+        os.path.join(cache, f"det_{h}x{w}.onnx"), so, providers=["VitisAIExecutionProvider"],
+        provider_options=[{"cache_dir": cache, "cache_key": f"det_{h}x{w}"}],
+    )
+
+
+def _compile_all(model: str, cache: str) -> None:
+    """The NPU compiler is single-threaded, so compile each bucket in its own process."""
+    import subprocess
+
+    procs = []
     for h, w in BUCKETS:
         fixed = os.path.join(cache, f"det_{h}x{w}.onnx")
         if not os.path.exists(fixed):
             _fix_shape(model, h, w, fixed)
-        so = ort.SessionOptions()
-        so.log_severity_level = 3
-        s = ort.InferenceSession(
-            fixed, so, providers=["VitisAIExecutionProvider"],
-            provider_options=[{"cache_dir": cache, "cache_key": f"det_{h}x{w}"}],
-        )
+        procs.append(subprocess.Popen(
+            [sys.executable, os.path.abspath(__file__), "--compile", cache, str(h), str(w)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ))
+    for p in procs:
+        p.wait()
+
+
+def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "--compile":
+        _session(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+        return
+    model, cache = sys.argv[1], sys.argv[2]
+    os.makedirs(cache, exist_ok=True)
+    _compile_all(model, cache)  # no-op per bucket once cached
+    sessions = []
+    for h, w in BUCKETS:
+        s = _session(cache, h, w)
         if s.get_providers()[0] != "VitisAIExecutionProvider":
             raise RuntimeError("VitisAI provider not active")
         sessions.append((h, w, s, s.get_inputs()[0].name))
