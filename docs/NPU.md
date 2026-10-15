@@ -45,11 +45,35 @@ component worth moving to the NPU.
   wakes the NPU.
 - Nothing is started automatically: run `flm serve qwen3:4b` yourself (or a user systemd unit).
 
+## 3b. Measurements (2026-10-15, plugged in, kernel 7.2.10, NPU fw 1.1.2.64)
+
+Same prompt (≈40 output tokens, Vietnamese → English), 5 sequential requests each, `scripts/bench_llm.py`.
+Models: Ollama `qwen2.5:3b` (Q4_K_M) vs FastFlowLM `qwen2.5-it:3b` (Q4_1). "chunk" ≈ one streamed token.
+
+| | Ollama on RTX 5060 (`keep_alive=0`) | FastFlowLM on XDNA2 NPU |
+|---|---|---|
+| Throughput (warm) | ~111 chunks/s | ~24 chunks/s |
+| Time to first token | ~1.2 s (model reloaded to VRAM every request) | ~0.9 s (model resident in NPU server) |
+| Whole 40-token answer | ~1.5 s | ~2.6 s |
+| dGPU power while generating | 27.9 W (idle 8.8 W → **+19 W**) | 16.7 W (idle 14.9 W → **+1.8 W**, within desktop noise) |
+| iGPU power while generating | 21.9 W | 19.9 W (idle readings 6.7–34 W: noisy) |
+| Output | "…Thursday: Progress report to customers." | "…Thursday: Report progress to the customers." |
+
+Caveats — read before quoting:
+- **Plugged in.** No battery discharge reading was taken, so total-system power / battery life is *not* measured.
+  dGPU idle varied between 8.8 W and 17 W across runs (compositor and other apps share the GPU), so only the
+  generation-time delta is meaningful. Single laptop, single model pair, short prompts, 5 runs.
+- Both Q4 3B models translate "Thứ Tư" as *Thursday* (it is Wednesday): a model-size limitation on both
+  backends, not an NPU issue — use a larger model (e.g. `qwen3:4b/8b`) for accuracy.
+- The NPU is ~4–5× slower per token than the dGPU; for short Translate/Explain answers this means about
+  one extra second, in exchange for not waking the dGPU.
+- FastFlowLM was run from its portable tarball (bundled XRT) with `ulimit -l unlimited`; first model load
+  into the NPU happens at `flm serve` start and was not timed.
+
 ## 4. Not done / open questions (unverified)
 
-- End-to-end power/latency numbers for FastFlowLM vs Ollama on this laptop (needs `powertop`/battery
-  discharge-rate measurement; deliberately not claimed here).
-- Vietnamese quality of FLM `qwen3:4b` vs Ollama `qwen3:4b` (both Q4; expected similar, untested).
+- Battery discharge-rate comparison while **unplugged** (the numbers above were taken on AC).
+- Vietnamese quality of FLM `qwen3:4b/8b` vs Ollama equivalents (only the 3B Qwen2.5 pair was compared, one prompt).
 - Auto-spawning `flm serve` on demand and stopping it when idle (socket activation) — design below.
 - Vision/QR/OCR on NPU — see §2, not pursued.
 
