@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from ..i18n import t
+from ..config import load_config
+from .palette import theme_color
 from .icons import get_icon
 
 
@@ -19,6 +21,7 @@ class ActionBar(QFrame):
 
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
+        self.theme = load_config().ui_theme
         self.setObjectName("ActionBar")
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(6, 5, 6, 5)
@@ -42,7 +45,7 @@ class ActionBar(QFrame):
         ask_layout.addWidget(self.ask_input)
 
         send_btn = QToolButton(self.ask_row)
-        send_btn.setIcon(get_icon("send", "#38bdf8", 14))
+        send_btn.setIcon(get_icon("send", theme_color("#38bdf8", self.theme), 14))
         send_btn.setIconSize(QSize(14, 14))
         send_btn.clicked.connect(self._submit_custom_ask)
         ask_layout.addWidget(send_btn)
@@ -68,7 +71,7 @@ class ActionBar(QFrame):
     def _make_btn(self, text: str, icon_name: str, obj_name: str = "", icon_color: str = "#e4e4e7") -> QToolButton:
         btn = QToolButton(self)
         btn.setText(f" {text}" if text else "")
-        btn.setIcon(get_icon(icon_name, color=icon_color, size=14))
+        btn.setIcon(get_icon(icon_name, color=theme_color(icon_color, self.theme), size=14))
         btn.setIconSize(QSize(14, 14))
         btn.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon if text else Qt.ToolButtonStyle.ToolButtonIconOnly

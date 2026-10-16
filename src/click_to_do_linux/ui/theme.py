@@ -110,3 +110,22 @@ QMenu::item:selected {
     color: #ffffff;
 }
 """
+
+
+def overlay_style(theme: str, source: str = GLASS_STYLE) -> str:
+    """Theme floating screen tools while keeping the captured pixels untouched."""
+    if theme != "light":
+        return source
+    import re
+    from .palette import theme_colors
+
+    result = theme_colors(source, theme)
+    result = re.sub(r"rgba\(255,\s*255,\s*255,\s*([0-9.]+)\)", r"rgba(15, 23, 42, \1)", result)
+    for original, replacement in {
+        "rgba(20, 20, 24, 0.96)": "rgba(255, 255, 255, 0.98)",
+        "rgba(18, 18, 22, 0.98)": "rgba(255, 255, 255, 0.98)",
+        "rgba(10, 10, 14, 0.90)": "rgba(248, 250, 252, 0.98)",
+        "rgba(22, 22, 27, 0.98)": "rgba(255, 255, 255, 0.98)",
+    }.items():
+        result = result.replace(original, replacement)
+    return result

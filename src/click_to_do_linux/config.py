@@ -25,6 +25,8 @@ class Config:
     target_language: str = "vi"
     # UI language: "auto" (follow system locale), "vi" or "en"
     ui_language: str = "auto"
+    # App workbench theme: "dark" or "light"
+    ui_theme: str = "dark"
     search_engine: str = "google"
     auto_detect_qr: bool = True
     save_directory: str = str(Path.home() / "Pictures" / "ClickToDo")

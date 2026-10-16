@@ -1,9 +1,10 @@
 """Clean, minimalist Settings & Local AI Model Manager (Raycast/Linear inspired, zero AI slop)."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
-from PyQt6.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QSignalBlocker, QSize, QTime, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -14,6 +15,9 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit,
     QLineEdit,
     QProgressBar,
+    QScrollArea,
+    QSpinBox,
+    QTimeEdit,
     QTabWidget,
     QPushButton,
     QVBoxLayout,
@@ -31,6 +35,7 @@ from .. import compositor as comp_mod
 DEFAULT_CAPTURE = comp_mod.DEFAULT_CAPTURE_KEY
 DEFAULT_COLOR = comp_mod.DEFAULT_COLOR_KEY
 from .icons import get_icon
+from .palette import apply_input_palette, theme_color, theme_colors, theme_stylesheet
 
 # (ollama tag, display label). Sizes are Ollama q4_K_M downloads; see README for the full table.
 RECOMMENDED_VI_MODELS = [
@@ -80,12 +85,19 @@ class ModelWarmupWorker(QThread):
 
 
 class SetupWindow(QWidget):
-    def __init__(self):
+    theme_changed = pyqtSignal(str)
+
+    def __init__(self, embedded=False, productivity_service=None):
         super().__init__()
+        self.embedded = embedded
+        self.productivity_service = productivity_service
         self.config: Config = load_config()
+        self.theme = self.config.ui_theme if self.config.ui_theme in ("light", "dark") else "dark"
         set_lang(self.config.ui_language)
         self.setWindowTitle(t("set_title"))
-        self.setFixedSize(640, 740)
+        if not embedded:
+            self.setMinimumSize(640, 560)
+            self.resize(780, 760)
 
         arrow_path = get_config_dir() / "chevron-down.svg"
         if not arrow_path.exists():
@@ -95,7 +107,7 @@ class SetupWindow(QWidget):
             )
         arrow_url = arrow_path.as_posix()
 
-        self.setStyleSheet(f"""
+        self._base_stylesheet = f"""
             QWidget {{
                 background-color: #09090b;
                 color: #f4f4f5;
@@ -246,9 +258,242 @@ class SetupWindow(QWidget):
                 background-color: #38bdf8;
                 border-radius: 3px;
             }}
-        """)
+        """
+        self._base_stylesheet = self._base_stylesheet.replace("#71717a", "#a1a1aa")
+        self._base_stylesheet += """
+            QSpinBox, QTimeEdit { background: #0c0c0f; color: #f4f4f5; border: 1px solid #3f3f46; border-radius: 6px; padding: 7px; min-height: 24px; }
+            QSpinBox:focus, QTimeEdit:focus { border-color: #38bdf8; }
+            QSpinBox:disabled, QTimeEdit:disabled { color: #a1a1aa; background: #18181b; }
+            QCheckBox { background: transparent; color: #f4f4f5; spacing: 9px; padding: 5px 0; }
+            QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #a1a1aa; border-radius: 4px; background: #0c0c0f; }
+            QCheckBox::indicator:checked { background: #38bdf8; border-color: #38bdf8; }
+            QScrollArea { border: none; background: transparent; }
+            QScrollArea > QWidget > QWidget { background: transparent; }
+            QScrollBar:vertical { width: 9px; background: transparent; }
+            QScrollBar::handle:vertical { min-height: 30px; background: #3f3f46; border-radius: 4px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+            QPushButton#ThemeChoice { background: #18181b; color: #f4f4f5; border: 1px solid #3f3f46; }
+            QPushButton#ThemeChoice:checked { background: #123044; color: #7dd3fc; border-color: #38bdf8; }
+        """
         self._build_ui()
-        self._refresh_ollama()
+        self.set_theme(self.theme)
+        QTimer.singleShot(0, self._refresh_ollama)
+
+    def _set_icon(self, button, name, color, size):
+        button.setProperty("theme_icon", (name, color, size))
+        button.setIcon(get_icon(name, theme_color(color, self.theme), size))
+
+    def _set_rich_text(self, label, source):
+        label.setProperty("rich_source", source)
+        label.setText(theme_colors(source, self.theme))
+
+    def set_theme(self, theme):
+        self.theme = "light" if theme == "light" else "dark"
+        self.config.ui_theme = self.theme
+        arrow = get_config_dir() / f"chevron-down-{self.theme}.svg"
+        stroke = theme_color("#a1a1aa", self.theme)
+        arrow.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{stroke}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>', encoding="utf-8")
+        base = self._base_stylesheet.replace("chevron-down.svg", arrow.name)
+        style = theme_stylesheet(base, self.theme)
+        if self.theme == "light":
+            style += """
+                QPushButton { background: #0f172a; color: #ffffff; }
+                QPushButton:hover { background: #1e293b; color: #ffffff; }
+                QPushButton#Secondary, QPushButton#ThemeChoice { background: #f1f5f9; color: #1e293b; border: 1px solid #94a3b8; }
+                QPushButton#Secondary:hover, QPushButton#ThemeChoice:hover { background: #e2e8f0; color: #0f172a; }
+                QPushButton#ThemeChoice:checked { background: #e0f2fe; color: #075985; border: 1px solid #0369a1; }
+                QPushButton#Primary { background: #0369a1; color: #ffffff; }
+                QPushButton#Primary:hover { background: #075985; color: #ffffff; }
+                QPushButton#Danger { background: #fff1f2; color: #b91c1c; border: 1px solid #fda4af; }
+                QPushButton#Danger:hover { background: #ffe4e6; color: #991b1b; }
+            """
+        arrows = {}
+        for direction, path in (("up", "m6 15 6-6 6 6"), ("down", "m6 9 6 6 6-6")):
+            icon = get_config_dir() / f"spin-{direction}-{self.theme}.svg"
+            icon.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="{stroke}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="{path}"/></svg>', encoding="utf-8")
+            arrows[direction] = icon.as_posix()
+        style += f"""
+            QSpinBox::up-button, QTimeEdit::up-button {{ subcontrol-origin: border; subcontrol-position: top right; width: 24px; border: none; background: transparent; }}
+            QSpinBox::down-button, QTimeEdit::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right; width: 24px; border: none; background: transparent; }}
+            QSpinBox::up-arrow, QTimeEdit::up-arrow {{ image: url("{arrows['up']}"); width: 11px; height: 9px; }}
+            QSpinBox::down-arrow, QTimeEdit::down-arrow {{ image: url("{arrows['down']}"); width: 11px; height: 9px; }}
+        """
+        self.setStyleSheet(style)
+        apply_input_palette(self, self.theme)
+        for button in self.findChildren(QPushButton):
+            metadata = button.property("theme_icon")
+            if metadata:
+                name, color, size = metadata
+                button.setIcon(get_icon(name, theme_color(color, self.theme), size))
+        for label in self.findChildren(QLabel):
+            source = label.property("rich_source")
+            if source:
+                label.setText(theme_colors(source, self.theme))
+        for name, button in getattr(self, "theme_choices", {}).items():
+            blocker = QSignalBlocker(button)
+            button.setChecked(name == self.theme)
+            del blocker
+
+    def _choose_theme(self, theme):
+        self.set_theme(theme)
+        config = load_config()
+        config.ui_theme = self.theme
+        save_config(config)
+        self.theme_changed.emit(self.theme)
+
+    def _scroll_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 14, 8, 10)
+        layout.setSpacing(14)
+        scroll = QScrollArea()
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(page)
+        return scroll, layout
+
+    def _build_appearance_tab(self):
+        page, layout = self._scroll_page()
+        card, content = self._make_card()
+        title = QLabel(t("theme_heading"))
+        title.setObjectName("CardTitle")
+        content.addWidget(title)
+        hint = QLabel(t("theme_hint"))
+        hint.setObjectName("Muted")
+        hint.setWordWrap(True)
+        content.addWidget(hint)
+        choices = QHBoxLayout()
+        self.theme_choices = {}
+        for theme, text, icon in (("light", "theme_light", "sun"), ("dark", "theme_dark", "moon")):
+            button = QPushButton(t(text))
+            button.setObjectName("ThemeChoice")
+            button.setCheckable(True)
+            button.setMinimumHeight(40)
+            self._set_icon(button, icon, "#38bdf8", 18)
+            button.clicked.connect(lambda checked=False, selected=theme: self._choose_theme(selected))
+            choices.addWidget(button)
+            self.theme_choices[theme] = button
+        content.addLayout(choices)
+        layout.addWidget(card)
+        layout.addStretch()
+        self.tabs.insertTab(0, page, t("tab_appearance"))
+
+    def _settings_row(self, layout, label, control):
+        row = QHBoxLayout()
+        row.setSpacing(18)
+        text = QLabel(label)
+        text.setWordWrap(True)
+        row.addWidget(text, 1)
+        row.addWidget(control)
+        layout.addLayout(row)
+
+    def _build_workday_tab(self):
+        service = self.productivity_service
+        page, layout = self._scroll_page()
+        card, content = self._make_card()
+        title = QLabel(t("office_focus_section"))
+        title.setObjectName("CardTitle")
+        content.addWidget(title)
+        hint = QLabel(t("workday_autosave"))
+        hint.setObjectName("Muted")
+        hint.setWordWrap(True)
+        content.addWidget(hint)
+        self.duration_spins = {}
+        for mode, key, low, high in (("focus", "office_focus_duration", 10, 90), ("short_break", "office_short_duration", 3, 30), ("long_break", "office_long_duration", 10, 45)):
+            spin = QSpinBox()
+            spin.setRange(low, high)
+            spin.setSuffix(" " + t("office_minutes"))
+            spin.setValue(service.timer_minutes(mode))
+            spin.valueChanged.connect(lambda value, selected=mode: service.set_timer_minutes(selected, value))
+            self.duration_spins[mode] = spin
+            self._settings_row(content, t(key), spin)
+        self.long_break_spin = QSpinBox()
+        self.long_break_spin.setRange(2, 8)
+        self.long_break_spin.setSuffix(" " + t("office_sessions"))
+        self.long_break_spin.setValue(service.long_break_every)
+        self.long_break_spin.valueChanged.connect(service.set_long_break_every)
+        self._settings_row(content, t("office_long_every"), self.long_break_spin)
+        layout.addWidget(card)
+        card, content = self._make_card()
+        title = QLabel(t("office_health_section"))
+        title.setObjectName("CardTitle")
+        content.addWidget(title)
+        self.reminder_controls = {}
+        for key, label in (("water", "office_water"), ("movement", "office_movement")):
+            row = QHBoxLayout()
+            enabled = QCheckBox(t(label))
+            enabled.toggled.connect(lambda checked, selected=key: service.set_reminder_enabled(selected, checked))
+            interval = QSpinBox()
+            interval.setRange(15, 240)
+            interval.setSingleStep(5)
+            interval.setPrefix(t("office_every") + " ")
+            interval.setSuffix(" " + t("office_minutes"))
+            interval.valueChanged.connect(lambda value, selected=key: service.set_reminder_interval(selected, value))
+            row.addWidget(enabled, 1)
+            row.addWidget(interval)
+            content.addLayout(row)
+            self.reminder_controls[key] = (enabled, interval)
+        layout.addWidget(card)
+        card, content = self._make_card()
+        self.schedule_enabled = QCheckBox(t("office_schedule"))
+        self.schedule_enabled.toggled.connect(service.set_schedule_enabled)
+        content.addWidget(self.schedule_enabled)
+        self.weekdays_only = QCheckBox(t("office_weekdays"))
+        self.weekdays_only.toggled.connect(service.set_weekdays_only)
+        content.addWidget(self.weekdays_only)
+        self.work_start = QTimeEdit()
+        self.work_end = QTimeEdit()
+        for edit in (self.work_start, self.work_end):
+            edit.setDisplayFormat("HH:mm")
+            edit.timeChanged.connect(self._set_work_hours)
+        self._settings_row(content, t("workday_start"), self.work_start)
+        self._settings_row(content, t("workday_end"), self.work_end)
+        layout.addWidget(card)
+        background = QLabel(t("shell_background_hint"))
+        background.setObjectName("Muted")
+        background.setWordWrap(True)
+        layout.addWidget(background)
+        layout.addStretch()
+        self.tabs.insertTab(0, page, t("tab_workday"))
+        self.tabs.setCurrentIndex(0)
+        service.state_changed.connect(self._refresh_workday)
+        self._refresh_workday()
+
+    def _set_work_hours(self):
+        self.productivity_service.set_work_hours(self.work_start.time().toString("HH:mm"), self.work_end.time().toString("HH:mm"))
+
+    def _refresh_workday(self):
+        service = self.productivity_service
+        for mode, spin in self.duration_spins.items():
+            blocker = QSignalBlocker(spin)
+            if not spin.hasFocus():
+                spin.setValue(service.timer_minutes(mode))
+            spin.setEnabled(not service.timer_running)
+            del blocker
+        blocker = QSignalBlocker(self.long_break_spin)
+        self.long_break_spin.setValue(service.long_break_every)
+        self.long_break_spin.setEnabled(not service.timer_running)
+        del blocker
+        for key, (enabled, interval) in self.reminder_controls.items():
+            data = service.reminder(key)
+            blockers = (QSignalBlocker(enabled), QSignalBlocker(interval))
+            enabled.setChecked(data["enabled"])
+            if not interval.hasFocus():
+                interval.setValue(data["interval_minutes"])
+            interval.setEnabled(data["enabled"])
+            del blockers
+        schedule = service.schedule
+        for control, value in ((self.schedule_enabled, schedule["enabled"]), (self.weekdays_only, schedule["weekdays_only"])):
+            blocker = QSignalBlocker(control)
+            control.setChecked(value)
+            del blocker
+        for control, key in ((self.work_start, "start"), (self.work_end, "end")):
+            blocker = QSignalBlocker(control)
+            if not control.hasFocus():
+                control.setTime(QTime.fromString(schedule[key], "HH:mm"))
+            control.setEnabled(schedule["enabled"])
+            del blocker
+        self.weekdays_only.setEnabled(schedule["enabled"])
 
     def _make_card(self) -> tuple[QFrame, QVBoxLayout]:
         card = QFrame(self)
@@ -260,7 +505,7 @@ class SetupWindow(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 18, 20, 18)
+        root.setContentsMargins(24 if self.embedded else 20, 16, 24 if self.embedded else 20, 18)
         root.setSpacing(12)
 
         # Header
@@ -272,10 +517,12 @@ class SetupWindow(QWidget):
         sub.setObjectName("HeaderSub")
         hdr.addWidget(title)
         hdr.addWidget(sub)
-        root.addLayout(hdr)
+        if not self.embedded:
+            root.addLayout(hdr)
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
+        self.tabs.tabBar().setDrawBase(False)
         root.addWidget(self.tabs, stretch=1)
         pages = []
         for title_key in ("tab_general", "tab_shortcuts", "tab_system"):
@@ -283,7 +530,13 @@ class SetupWindow(QWidget):
             lay = QVBoxLayout(page)
             lay.setContentsMargins(0, 12, 0, 0)
             lay.setSpacing(12)
-            self.tabs.addTab(page, t(title_key))
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.Shape.NoFrame)
+            scroll.setWidget(page)
+            self.tabs.addTab(scroll, t(title_key))
+            if title_key == "tab_general":
+                self._general_page = scroll
             pages.append(lay)
         p_general, p_keys, p_system = pages
 
@@ -347,7 +600,7 @@ class SetupWindow(QWidget):
 
         ref_btn = QPushButton(t("refresh"))
         ref_btn.setObjectName("Secondary")
-        ref_btn.setIcon(get_icon("refresh", "#e4e4e7", 13))
+        self._set_icon(ref_btn, "refresh", "#e4e4e7", 13)
         ref_btn.setIconSize(QSize(13, 13))
         ref_btn.setMinimumHeight(32)
         ref_btn.setMinimumWidth(110)
@@ -418,14 +671,14 @@ class SetupWindow(QWidget):
 
         act_row = QHBoxLayout()
         self.warmup_btn = QPushButton(t("btn_warmup"))
-        self.warmup_btn.setIcon(get_icon("download", "#e4e4e7", 13))
+        self._set_icon(self.warmup_btn, "download", "#e4e4e7", 13)
         self.warmup_btn.setObjectName("Secondary")
         self.warmup_btn.setMinimumHeight(36)
         self.warmup_btn.clicked.connect(self._start_warmup)
         act_row.addWidget(self.warmup_btn)
 
         self.install_btn = QPushButton(t("btn_install"))
-        self.install_btn.setIcon(get_icon("settings", "#e4e4e7", 13))
+        self._set_icon(self.install_btn, "settings", "#e4e4e7", 13)
         self.install_btn.setObjectName("Secondary")
         self.install_btn.setMinimumHeight(36)
         self.install_btn.clicked.connect(self._install_desktop_app)
@@ -434,14 +687,14 @@ class SetupWindow(QWidget):
 
         act_row2 = QHBoxLayout()
         self.uninstall_btn = QPushButton(t("btn_uninstall"))
-        self.uninstall_btn.setIcon(get_icon("power", "#f87171", 13))
+        self._set_icon(self.uninstall_btn, "power", "#f87171", 13)
         self.uninstall_btn.setObjectName("Danger")
         self.uninstall_btn.setMinimumHeight(36)
         self.uninstall_btn.clicked.connect(self._uninstall_desktop_app)
         act_row2.addWidget(self.uninstall_btn)
 
         self.about_btn = QPushButton(t("btn_about"))
-        self.about_btn.setIcon(get_icon("sparkles", "#e4e4e7", 13))
+        self._set_icon(self.about_btn, "sparkles", "#e4e4e7", 13)
         self.about_btn.setObjectName("Secondary")
         self.about_btn.setMinimumHeight(36)
         self.about_btn.clicked.connect(self._show_about)
@@ -453,6 +706,10 @@ class SetupWindow(QWidget):
         p_system.addStretch()
         self._build_shortcuts_tab(p_keys)
 
+        self._build_appearance_tab()
+        if self.productivity_service is not None:
+            self._build_workday_tab()
+
         # Footer
         footer = QHBoxLayout()
         footer.addStretch()
@@ -460,10 +717,11 @@ class SetupWindow(QWidget):
         close_btn.setObjectName("Secondary")
         close_btn.setMinimumHeight(32)
         close_btn.clicked.connect(self.close)
-        footer.addWidget(close_btn)
+        if not self.embedded:
+            footer.addWidget(close_btn)
 
         self.apply_btn = QPushButton(t("btn_apply"))
-        self.apply_btn.setObjectName("Secondary")
+        self.apply_btn.setObjectName("Secondary" if not self.embedded else "Primary")
         self.apply_btn.setMinimumHeight(32)
         self.apply_btn.clicked.connect(self._apply)
         footer.addWidget(self.apply_btn)
@@ -471,8 +729,15 @@ class SetupWindow(QWidget):
         save_btn = QPushButton(t("btn_save"))
         save_btn.setMinimumHeight(32)
         save_btn.clicked.connect(self._save_and_close)
-        footer.addWidget(save_btn)
+        if not self.embedded:
+            footer.addWidget(save_btn)
         root.addLayout(footer)
+        if self.embedded:
+            self.tabs.currentChanged.connect(self._sync_apply_action)
+            self._sync_apply_action()
+
+    def _sync_apply_action(self, index=None):
+        self.apply_btn.setVisible(self.tabs.currentWidget() is self._general_page)
 
     def _on_backend_changed(self):
         npu_mode = self.backend_combo.currentData() == "openai"
@@ -563,7 +828,7 @@ class SetupWindow(QWidget):
         lay.addWidget(self.diag_lbl)
         rb = QPushButton(t("refresh"))
         rb.setObjectName("Secondary")
-        rb.setIcon(get_icon("refresh", "#e4e4e7", 13))
+        self._set_icon(rb, "refresh", "#e4e4e7", 13)
         rb.clicked.connect(self._refresh_diag)
         lay.addWidget(rb)
         self._refresh_diag()
@@ -572,7 +837,7 @@ class SetupWindow(QWidget):
     def _refresh_diag(self):
         def row(ok: bool, label: str, hint: str = "") -> str:
             mark = '<span style="color:#4ade80">●</span>' if ok else '<span style="color:#f87171">●</span>'
-            extra = f' <span style="color:#52525b">— {hint}</span>' if (hint and not ok) else ""
+            extra = f' <span style="color:#a1a1aa">— {hint}</span>' if (hint and not ok) else ""
             return f"{mark}&nbsp; {label}{extra}"
 
         c = comp_mod.detect()
@@ -586,6 +851,8 @@ class SetupWindow(QWidget):
             ).returncode == 0
         except Exception:
             pass
+        config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")).expanduser()
+        service_on = service_on or (config_home / "autostart" / "click-to-do.desktop").is_file()
         rows = [
             row(c.id != "generic", f"{t('diag_compositor')}: <b>{c.label}</b>", t("diag_unknown")),
             row(bool(shutil.which("grim")), "grim", t("diag_install", p="grim")),
@@ -603,7 +870,7 @@ class SetupWindow(QWidget):
         rows += [
             row(service_on, t("diag_service"), t("diag_service_hint")),
         ]
-        self.diag_lbl.setText("<br>".join(rows))
+        self._set_rich_text(self.diag_lbl, "<br>".join(rows))
 
     # ------------------------------------------------------------ shortcuts tab
     def _build_shortcuts_tab(self, layout: QVBoxLayout):
@@ -667,11 +934,11 @@ class SetupWindow(QWidget):
         btns = QHBoxLayout()
         self.copy_snip_btn = QPushButton(" " + t("copy"))
         self.copy_snip_btn.setObjectName("Secondary")
-        self.copy_snip_btn.setIcon(get_icon("copy", "#e4e4e7", 13))
+        self._set_icon(self.copy_snip_btn, "copy", "#e4e4e7", 13)
         self.copy_snip_btn.clicked.connect(self._copy_snippet)
         btns.addWidget(self.copy_snip_btn)
         self.apply_keys_btn = QPushButton(" " + t("keys_apply"))
-        self.apply_keys_btn.setIcon(get_icon("check", "#09090b", 13))
+        self._set_icon(self.apply_keys_btn, "check", "#09090b", 13)
         self.apply_keys_btn.clicked.connect(self._apply_keys)
         btns.addWidget(self.apply_keys_btn)
         self.remove_keys_btn = QPushButton(" " + t("keys_remove"))
@@ -704,8 +971,8 @@ class SetupWindow(QWidget):
         c = self._current_comp()
         detected = c.id == self.comp.id
         tag = t("detected_auto") if detected else t("detected_manual")
-        cfg = f"<br><span style='color:#71717a'>{t('config_file')}: {c.config_path}</span>" if c.config_path else ""
-        self.comp_lbl.setText(f"<b>{c.label}</b> &nbsp;<span style='color:#38bdf8'>{tag}</span>{cfg}")
+        cfg = f"<br><span style='color:#a1a1aa'>{t('config_file')}: {c.config_path}</span>" if c.config_path else ""
+        self._set_rich_text(self.comp_lbl, f"<b>{c.label}</b> &nbsp;<span style='color:#38bdf8'>{tag}</span>{cfg}")
         self.apply_keys_btn.setEnabled(c.can_apply)
         self.remove_keys_btn.setEnabled(c.can_apply)
         self._refresh_snippet()
@@ -721,7 +988,7 @@ class SetupWindow(QWidget):
                 notes.append(f"<span style='color:#fbbf24'>{t('key_conflict', k=key)}</span> <code>{hit}</code>")
         for hit in comp_mod.existing_click_to_do_binds(c):
             notes.append(f"<span style='color:#4ade80'>{t('key_existing')}</span> <code>{hit}</code>")
-        self.key_note.setText("<br>".join(notes) or t("key_ok"))
+        self._set_rich_text(self.key_note, "<br>".join(notes) or t("key_ok"))
         self.key_note.setVisible(True)
 
     def _copy_snippet(self):
@@ -764,6 +1031,7 @@ class SetupWindow(QWidget):
         QMessageBox.information(self, t("about_title"), t("about_body"))
 
     def _save_config_data(self):
+        self.config.ui_theme = self.theme
         self.config.ui_language = self.ui_lang_combo.currentData()
         self.config.bg_removal_model = self.bg_combo.currentData()
         self.config.llm_backend = self.backend_combo.currentData()
@@ -788,4 +1056,5 @@ class SetupWindow(QWidget):
     def _save_and_close(self):
         self.config.setup_completed = True
         self._save_config_data()
-        self.close()
+        if not self.embedded:
+            self.close()

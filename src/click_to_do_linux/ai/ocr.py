@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,17 +65,21 @@ class OCREngine:
     """Singleton RapidOCR engine kept warm in Daemon memory."""
 
     _instance: Optional["OCREngine"] = None
+    _instance_lock = threading.Lock()
 
     def __init__(self):
         from rapidocr import RapidOCR
 
+        self._inference_lock = threading.RLock()
         self.engine = RapidOCR()
         self._npu = None
 
     @classmethod
     def get_instance(cls) -> "OCREngine":
         if cls._instance is None:
-            cls._instance = OCREngine()
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = OCREngine()
         return cls._instance
 
     @classmethod
@@ -82,11 +87,12 @@ class OCREngine:
         """Pre-loads ONNX session into RAM so first capture has 0 cold-start."""
         inst = cls.get_instance()
         dummy = np.zeros((64, 64, 3), dtype=np.uint8)
-        try:
-            inst.engine(dummy, use_det=True, use_cls=False, use_rec=False)
-        except Exception:
-            pass
-        inst._maybe_attach_npu()
+        with inst._inference_lock:
+            try:
+                inst.engine(dummy, use_det=True, use_cls=False, use_rec=False)
+            except Exception:
+                pass
+            inst._maybe_attach_npu()
 
     def _maybe_attach_npu(self) -> None:
         """Routes text detection to the NPU when enabled; the CPU session stays as fallback."""
@@ -130,7 +136,8 @@ class OCREngine:
 
     def _detect_hybrid(self, image: Image.Image, img_np: np.ndarray):
         """RapidOCR finds text lines; Tesseract reads them. Returns [(pts, text, conf)] or None."""
-        out = self.engine(img_np, use_det=True, use_cls=False, use_rec=False)
+        with self._inference_lock:
+            out = self.engine(img_np, use_det=True, use_cls=False, use_rec=False)
         det = out.boxes
         if det is None or len(det) == 0:
             return []
@@ -159,7 +166,8 @@ class OCREngine:
                 except Exception as e:
                     print(f"[OCREngine] Tesseract path failed, falling back to RapidOCR: {e}")
             if results is None:
-                out = self.engine(img_np, use_det=True, use_cls=False, use_rec=True)
+                with self._inference_lock:
+                    out = self.engine(img_np, use_det=True, use_cls=False, use_rec=True)
                 if out.boxes is None or out.txts is None:
                     return []
                 results = list(zip(out.boxes.tolist(), out.txts, out.scores))

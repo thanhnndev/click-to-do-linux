@@ -1,4 +1,4 @@
-"""Click to Do Linux - Instant Screen Intelligence Overlay for Wayland/Niri."""
+"""Click to Do Linux personal workbench and screen tools for Wayland."""
 
 from .main import main
 

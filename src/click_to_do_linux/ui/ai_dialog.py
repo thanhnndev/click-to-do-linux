@@ -14,6 +14,9 @@ from PyQt6.QtWidgets import (
 from ..utils.clipboard import ClipboardManager
 from ..i18n import t
 from .icons import get_icon
+from ..config import load_config
+from .palette import theme_color
+from .theme import overlay_style
 
 
 class StreamWorker(QThread):
@@ -37,6 +40,7 @@ class StreamWorker(QThread):
 class AIDialog(QFrame):
     def __init__(self, title: str, generator_func, parent: QWidget = None):
         super().__init__(parent)
+        self.theme = load_config().ui_theme
         self.setObjectName("AiDialog")
         self.setFixedSize(500, 320)
         self.setWindowFlags(Qt.WindowType.SubWindow | Qt.WindowType.FramelessWindowHint)
@@ -47,16 +51,16 @@ class AIDialog(QFrame):
 
         header = QHBoxLayout()
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("color: #f4f4f5; font-weight: 600; font-size: 13px;")
+        self.title_label.setStyleSheet(overlay_style(self.theme, "color: #f4f4f5; font-weight: 600; font-size: 13px;"))
         header.addWidget(self.title_label)
         header.addStretch()
 
         self.status_label = QLabel(t("generating"))
-        self.status_label.setStyleSheet("color: #71717a; font-size: 11px;")
+        self.status_label.setStyleSheet(overlay_style(self.theme, "color: #a1a1aa; font-size: 12px;"))
         header.addWidget(self.status_label)
 
         self.close_btn = QToolButton()
-        self.close_btn.setIcon(get_icon("close", "#a1a1aa", 14))
+        self.close_btn.setIcon(get_icon("close", theme_color("#a1a1aa", self.theme), 14))
         self.close_btn.setIconSize(QSize(14, 14))
         self.close_btn.clicked.connect(self.hide)
         header.addWidget(self.close_btn)
@@ -68,8 +72,8 @@ class AIDialog(QFrame):
 
         footer = QHBoxLayout()
         self.copy_btn = QPushButton(" " + t("copy"))
-        self.copy_btn.setIcon(get_icon("copy", "#ffffff", 13))
-        self.copy_btn.setStyleSheet("""
+        self.copy_btn.setIcon(get_icon("copy", theme_color("#ffffff", self.theme), 13))
+        self.copy_btn.setStyleSheet(overlay_style(self.theme, """
             QPushButton {
                 background-color: rgba(255, 255, 255, 0.12);
                 color: #ffffff;
@@ -80,7 +84,7 @@ class AIDialog(QFrame):
                 font-weight: 500;
             }
             QPushButton:hover { background-color: rgba(255, 255, 255, 0.20); }
-        """)
+        """))
         self.copy_btn.clicked.connect(self._copy_result)
         footer.addWidget(self.copy_btn)
         footer.addStretch()

@@ -30,7 +30,8 @@ from .action_bar import ActionBar
 from .ai_dialog import AIDialog
 from ..i18n import t
 from .icons import get_icon
-from .theme import GLASS_STYLE
+from .theme import overlay_style
+from .palette import apply_input_palette, theme_color
 
 
 class OCRWorker(QThread):
@@ -73,10 +74,10 @@ class OverlayWindow(QWidget):
         super().__init__()
         self.setObjectName("OverlayRoot")
         self.setWindowTitle("Click to Do")
-        self.setStyleSheet(GLASS_STYLE)
 
         self.captured = captured
         self.config: Config = load_config()
+        self.setStyleSheet(overlay_style(self.config.ui_theme))
 
         self.ocr_boxes: List[TextBox] = []
         self.qr_entities: List[QREntity] = []
@@ -102,6 +103,7 @@ class OverlayWindow(QWidget):
 
         self._setup_window()
         self._init_widgets()
+        apply_input_palette(self, self.config.ui_theme)
         self._start_ocr()
 
     def _setup_window(self):
@@ -146,7 +148,7 @@ class OverlayWindow(QWidget):
 
         self.color_btn = QToolButton(self.top_bar)
         self.color_btn.setText(" " + t("pick_color"))
-        self.color_btn.setIcon(get_icon("pipette", "#e4e4e7", 14))
+        self.color_btn.setIcon(get_icon("pipette", theme_color("#e4e4e7", self.config.ui_theme), 14))
         self.color_btn.setIconSize(QSize(14, 14))
         self.color_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.color_btn.clicked.connect(self._toggle_color_picker)
@@ -154,7 +156,7 @@ class OverlayWindow(QWidget):
 
         self.copy_all_btn = QToolButton(self.top_bar)
         self.copy_all_btn.setText(" " + t("copy_all"))
-        self.copy_all_btn.setIcon(get_icon("text", "#e4e4e7", 14))
+        self.copy_all_btn.setIcon(get_icon("text", theme_color("#e4e4e7", self.config.ui_theme), 14))
         self.copy_all_btn.setIconSize(QSize(14, 14))
         self.copy_all_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.copy_all_btn.clicked.connect(self._copy_all_screen_text)

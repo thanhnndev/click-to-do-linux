@@ -1,10 +1,10 @@
 [project]
 name = "click-to-do-linux"
 version = "0.3.1"
-description = "Click to Do for Linux: on-screen OCR (Vietnamese-aware), subject cutout and local AI overlay for Wayland"
+description = "Personal Linux workbench with Pomodoro, wellness reminders, daily notes, tasks, and local AI screen tools"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
-keywords = ["wayland", "ocr", "ollama", "vietnamese", "click-to-do"]
+keywords = ["wayland", "office", "productivity", "pomodoro", "wellbeing", "notes", "ocr", "ollama", "vietnamese", "click-to-do"]
 readme = "README.md"
 authors = [
     { name = "thanhnndev", email = "contact@thanhnn.dev" }

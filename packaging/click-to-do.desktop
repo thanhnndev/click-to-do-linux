@@ -1,14 +1,21 @@
 [Desktop Entry]
 Type=Application
 Name=Click to Do
-GenericName=Screen Intelligence Overlay
-Comment=Instant OCR, cutout and local AI screen overlay
-Exec=click-to-do capture
+Name[vi]=Click to Do — Bàn làm việc
+GenericName=Office Productivity Assistant
+GenericName[vi]=Trợ lý công việc cá nhân
+Comment=Personal workbench with focus timer, wellness reminders, notes, tasks, and screen tools
+Comment[vi]=Bàn làm việc cá nhân với Pomodoro, nhắc sức khỏe, ghi chú, danh sách việc và công cụ màn hình
+Exec=click-to-do office
 Icon=click-to-do
 Terminal=false
-StartupWMClass=click-to-do-overlay
-Categories=Utility;Graphics;
-Actions=Settings;
+StartupWMClass=click-to-do-office
+Categories=Office;Utility;
+Actions=Capture;Settings;
+
+[Desktop Action Capture]
+Name=Capture Screen
+Exec=click-to-do capture
 
 [Desktop Action Settings]
 Name=Settings & Local Models

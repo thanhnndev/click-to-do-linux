@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+import time
 
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.services.debug=false;qt.qpa.services.warning=false"
 
@@ -15,7 +16,6 @@ from .daemon import APP_ID, ClickToDoDaemon, print_bar_status_json, send_command
 from .installer import install_system_integration, uninstall_system_integration
 from .ui.icons import get_icon
 from .ui.overlay import OverlayWindow
-from .ui.setup_window import SetupWindow
 
 
 def run_capture(color_mode: bool = False):
@@ -30,10 +30,8 @@ def run_capture(color_mode: bool = False):
 
     cfg = load_config()
     if not cfg.setup_completed:
-        win = SetupWindow()
-        win.setWindowIcon(icon)
-        win.show()
-        sys.exit(app.exec())
+        run_settings()
+        return
 
     captured = ScreenCapture.capture()
     if not captured:
@@ -46,29 +44,44 @@ def run_capture(color_mode: bool = False):
     sys.exit(app.exec())
 
 
-def run_settings():
-    if send_command_to_daemon("settings"):
+def _run_resident_window(page: str):
+    command = "settings" if page == "settings" else "office"
+    if send_command_to_daemon(command):
         return
-    QGuiApplication.setDesktopFileName("click-to-do-settings")
-    app = QApplication.instance() or QApplication(sys.argv)
-    icon = QIcon.fromTheme("click-to-do", get_icon("app_logo", "#38bdf8", 32))
-    app.setWindowIcon(icon)
-    win = SetupWindow()
-    win.setWindowIcon(icon)
-    win.show()
-    sys.exit(app.exec())
+    daemon = ClickToDoDaemon()
+    if daemon.already_running:
+        for _ in range(20):
+            if send_command_to_daemon(command):
+                return
+            time.sleep(0.05)
+        print("Click to Do is starting in the background, but its local command socket is not ready.", file=sys.stderr)
+        sys.exit(1)
+    if page == "settings":
+        daemon.open_settings()
+    else:
+        daemon.open_office()
+    daemon.run()
+
+
+def run_settings():
+    _run_resident_window("settings")
+
+
+def run_office():
+    _run_resident_window("workbench")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Click to Do Linux — Screen Intelligence Overlay")
+    parser = argparse.ArgumentParser(description="Click to Do Linux — Personal Workbench & Screen Tools")
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("capture", help="Trigger the screen overlay")
     subparsers.add_parser("color", help="Trigger screen HEX color picker")
     subparsers.add_parser("daemon", help="Run resident background daemon & bar tray icon")
     subparsers.add_parser("settings", help="Open settings and local AI model manager")
-    subparsers.add_parser("install", help="Build and install desktop app, icon, and systemd service")
-    uninstall_p = subparsers.add_parser("uninstall", help="Remove desktop app, icon, and systemd service")
+    subparsers.add_parser("office", help="Open personal workday dashboard")
+    subparsers.add_parser("install", help="Install XDG launchers, icons, and session-aware background startup")
+    uninstall_p = subparsers.add_parser("uninstall", help="Remove desktop launchers, icons, and background startup")
     uninstall_p.add_argument("--purge", action="store_true", help="Also delete config and downloaded data")
     subparsers.add_parser("bar-status", help="Output JSON status for custom Waybar/Umbriel modules")
     subparsers.add_parser("stop", help="Stop background daemon")
@@ -81,6 +94,8 @@ def main():
         run_capture(color_mode=True)
     elif args.command == "settings":
         run_settings()
+    elif args.command == "office":
+        run_office()
     elif args.command == "install":
         ok, msg = install_system_integration()
         print(msg)
@@ -93,8 +108,10 @@ def main():
         print_bar_status_json()
     elif args.command == "stop":
         send_command_to_daemon("quit")
-    else:
+    elif args.command == "capture":
         run_capture()
+    else:
+        run_office()
 
 
 if __name__ == "__main__":
