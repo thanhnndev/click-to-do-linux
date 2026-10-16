@@ -5,7 +5,7 @@
 <h1 align="center">Click to Do for Linux</h1>
 
 <p align="center">
-  A high-speed, native-feeling port of <b>Windows 11 Click to Do</b> built for modern Wayland compositors. Tested on Niri and Umbriel; see <a href="docs/COMPATIBILITY.md">compatibility</a>.
+  A personal Linux workbench with screen tools inspired by <b>Windows 11 Click to Do</b>. Tested on Niri and Umbriel; see <a href="docs/COMPATIBILITY.md">compatibility</a>.
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@ English | [Tiếng Việt](README.vi.md)
 
 > Tested on one machine only (CachyOS, Niri with DMS and Umbriel, AMD Ryzen AI 9 HX 370 + RTX 5060). Other distros and compositors are implemented but unverified; see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
-Freeze the screen, make every text line selectable (with diacritic-accurate Vietnamese OCR), detect QR codes, cut out subjects, redact sensitive areas, pick colors, and send text to a local LLM. A resident daemon stays loaded in the background, and OCR and AI run locally.
+Click to Do is a personal Linux workbench for daily tasks, quick notes, Pomodoro focus sessions, and gentle water and movement reminders. Its screen tools add Vietnamese-aware OCR, QR detection, subject cutout, privacy redaction, color picking, and local AI. The resident daemon keeps timers and reminders running when the workspace window is closed.
 
 ## Contents
 
@@ -34,6 +34,12 @@ Freeze the screen, make every text line selectable (with diacritic-accurate Viet
 
 ## Features
 
+- **One app shell:** Workbench and Settings share a window and sidebar. Configure Pomodoro, wellness reminders and work hours in Settings > Workday.
+- **Light and dark modes:** switch from the sidebar or Settings > Appearance. The saved choice also themes the tray, screen toolbar and AI panel.
+- **Personal workbench:** daily task list and notes saved locally; open it from the app launcher or system tray.
+- **Pomodoro timer:** adjustable focus and break durations with short and long breaks; keeps running after the window closes.
+- **Gentle wellbeing reminders:** configurable water and movement reminders, limited by default to weekdays from 09:00 to 18:00. Change the hours, mark a reminder done, snooze it, or pause reminders for an hour.
+- **Work shortcuts:** open the screen OCR overlay or color picker directly from the workbench.
 - **Fast screen freeze:** framebuffers stream from `grim` straight into RAM, with no temporary files.
 - **HiDPI and multi-monitor:** physical pixels are mapped to logical Wayland coordinates (1.0x, 1.5x, 2.0x).
 - **Text interaction:** click a line for actions (Copy, Translate, Explain, Ask AI, Search); double-click to copy and exit; `Shift + Click` to merge lines; `Ctrl + F` to find text on screen.
@@ -91,6 +97,8 @@ Arch users can also build `packaging/arch` (AUR package `click-to-do-linux-git`,
 
 ## Usage and shortcuts
 
+Open **Click to Do** from your app launcher or run `click-to-do` to open the workbench. Screen capture and color picker shortcuts continue to work independently.
+
 `click-to-do settings` > Shortcuts detects your compositor and can write the key bindings for you (defaults: `Mod+Shift+C` capture, `Mod+Alt+C` color picker). Per-compositor details and manual snippets: [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
 ## Vietnamese OCR and models
@@ -105,11 +113,12 @@ The daemon is idle-cheap; the LLM is what wakes a discrete GPU. On AMD Ryzen AI 
 
 | Command | Description |
 | --- | --- |
+| `click-to-do` / `click-to-do office` | Open the personal workbench |
 | `click-to-do capture` | Freeze screen and open the overlay (via the resident daemon) |
 | `click-to-do color` | Open the overlay in color picker mode |
 | `click-to-do settings` | Open Settings and the model manager |
 | `click-to-do daemon` | Start the resident daemon and bar icon |
-| `click-to-do install` | Install desktop entry, icon and systemd user service |
+| `click-to-do install` | Install XDG launchers, icons and session-aware background startup |
 | `click-to-do uninstall [--purge]` | Remove them (optionally config and data) |
 | `click-to-do bar-status` | JSON status for custom bar modules |
 | `click-to-do stop` | Stop the daemon |

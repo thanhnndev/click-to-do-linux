@@ -5,7 +5,7 @@
 <h1 align="center">Click to Do for Linux</h1>
 
 <p align="center">
-  Bản port của <b>Click to Do trên Windows 11</b> cho các compositor Wayland hiện đại. Đã kiểm thử trên Niri và Umbriel; xem <a href="docs/COMPATIBILITY.md">danh sách tương thích</a>.
+  Bàn làm việc cá nhân cho Linux, kết hợp công cụ màn hình lấy cảm hứng từ <b>Click to Do trên Windows 11</b>. Đã kiểm thử trên Niri và Umbriel; xem <a href="docs/COMPATIBILITY.md">danh sách tương thích</a>.
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 
 > Mới chỉ được kiểm thử trên một máy (CachyOS, Niri với DMS và Umbriel, AMD Ryzen AI 9 HX 370 + RTX 5060). Các distro và compositor khác đã được viết hỗ trợ nhưng chưa được xác minh; xem [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
-Đóng băng màn hình, biến mọi dòng chữ thành có thể chọn (OCR tiếng Việt giữ đúng dấu), nhận diện mã QR, tách chủ thể, che vùng nhạy cảm, lấy màu và gửi văn bản cho LLM chạy cục bộ. Một daemon thường trực chạy nền; OCR và AI đều chạy trên máy của bạn.
+Không gian làm việc cá nhân cho Linux: quản lý việc trong ngày, ghi chú nhanh, Pomodoro và nhắc uống nước/vận động nhẹ. Khi cần xử lý nội dung trên màn hình, Click to Do còn có OCR tiếng Việt, nhận diện mã QR, tách chủ thể, che vùng nhạy cảm, lấy màu và AI chạy cục bộ. Daemon giữ bộ đếm và nhắc nhở hoạt động trong nền.
 
 ## Mục lục
 
@@ -33,6 +33,12 @@
 
 ## Tính năng
 
+- **Một app chung:** Bàn làm việc và Cài đặt dùng chung cửa sổ với sidebar. Cấu hình Pomodoro, nhắc sức khỏe và giờ làm nằm trong Cài đặt > Ngày làm việc.
+- **Giao diện sáng/tối:** đổi nhanh từ sidebar hoặc Cài đặt > Giao diện; lựa chọn được nhớ cho lần mở sau và áp dụng cho tray, thanh công cụ màn hình và bảng AI.
+- **Bàn làm việc cá nhân:** danh sách việc và ghi chú theo ngày, tự lưu cục bộ; mở nhanh từ menu ứng dụng hoặc khay hệ thống.
+- **Pomodoro:** phiên tập trung tùy chỉnh, nghỉ ngắn/nghỉ dài theo chu kỳ; bộ đếm tiếp tục chạy khi đóng cửa sổ.
+- **Nhắc sức khỏe nhẹ nhàng:** nhắc uống nước và rời ghế vận động với khoảng thời gian tùy chỉnh; mặc định chỉ trong ngày thường, 09:00–18:00. Có thể đổi giờ, đánh dấu đã xong, hoãn 10 phút hoặc tạm dừng một giờ.
+- **Lối tắt công việc:** mở OCR màn hình hoặc công cụ lấy màu ngay trong Bàn làm việc.
 - **Đóng băng màn hình nhanh:** framebuffer từ `grim` được đưa thẳng vào RAM, không ghi file tạm.
 - **HiDPI và nhiều màn hình:** ánh xạ pixel vật lý sang tọa độ logic của Wayland (1.0x, 1.5x, 2.0x).
 - **Thao tác với văn bản:** bấm vào dòng để mở hành động (Sao chép, Dịch, Giải thích, Hỏi AI, Tìm kiếm); bấm đúp để sao chép rồi thoát; `Shift + Click` để gộp nhiều dòng; `Ctrl + F` để tìm chữ trên màn hình.
@@ -63,6 +69,8 @@ Gỡ cài đặt: **Cài đặt > Gỡ cài đặt...** hoặc `click-to-do unin
 
 ## Sử dụng và phím tắt
 
+Mở **Click to Do** từ menu ứng dụng hoặc chạy `click-to-do` để vào Bàn làm việc. Các phím tắt chụp màn hình và lấy màu vẫn hoạt động độc lập.
+
 `click-to-do settings` > tab Phím tắt tự nhận diện compositor và có thể ghi giúp bạn các phím (mặc định `Mod+Shift+C` chụp, `Mod+Alt+C` lấy màu). Chi tiết từng compositor và đoạn cấu hình thủ công: [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
 ## OCR tiếng Việt và model
@@ -77,11 +85,12 @@ Daemon gần như không tốn tài nguyên khi rảnh; LLM mới là thứ đá
 
 | Lệnh | Mô tả |
 | --- | --- |
+| `click-to-do` / `click-to-do office` | Mở Bàn làm việc cá nhân |
 | `click-to-do capture` | Đóng băng màn hình và mở overlay (qua daemon thường trực) |
 | `click-to-do color` | Mở overlay ở chế độ lấy màu |
 | `click-to-do settings` | Mở Cài đặt và trình quản lý model |
 | `click-to-do daemon` | Chạy daemon thường trực và biểu tượng trên bar |
-| `click-to-do install` | Cài desktop entry, icon và dịch vụ systemd user |
+| `click-to-do install` | Cài launcher XDG, icon và tự khởi động daemon theo phiên desktop |
 | `click-to-do uninstall [--purge]` | Gỡ các mục trên (tùy chọn xóa cả cấu hình và dữ liệu) |
 | `click-to-do bar-status` | Trạng thái JSON cho module bar tùy chỉnh |
 | `click-to-do stop` | Dừng daemon |
