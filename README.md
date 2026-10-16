@@ -101,6 +101,8 @@ Open **Click to Do** from your app launcher or run `click-to-do` to open the wor
 
 `click-to-do settings` > Shortcuts detects your compositor and can write the key bindings for you (defaults: `Mod+Shift+C` capture, `Mod+Alt+C` color picker). Per-compositor details and manual snippets: [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
+Reopening the overlay on identical screen content reuses OCR/QR boxes immediately. The daemon keeps up to six analyses in RAM for five minutes; changed pixels, display geometry, scale, or OCR settings trigger fresh analysis. Cached images and text are never written to disk, and quitting the daemon clears the cache. Changing clocks or video also invalidate the match.
+
 ## Vietnamese OCR and models
 
 Stock PP-OCR drops Vietnamese tone marks, so detection (RapidOCR) is combined with Tesseract `vie+eng` per line. Install `tesseract` and use Settings > Download & Warmup Models. Local LLM recommendations and cutout models: [docs/MODELS.md](docs/MODELS.md).

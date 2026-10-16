@@ -19,7 +19,8 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QToolButton, QWidget
 
-from ..ai.entities import EntityDetector, QREntity
+from ..ai.entities import QREntity
+from ..ai.screen_cache import screen_analysis_cache
 from ..ai.llm import LLMService
 from ..ai.ocr import OCREngine, TextBox
 from ..ai.segmentation import SegmentationEngine
@@ -32,23 +33,6 @@ from ..i18n import t
 from .icons import get_icon
 from .theme import overlay_style
 from .palette import apply_input_palette, theme_color
-
-
-class OCRWorker(QThread):
-    finished = pyqtSignal(list, list)
-
-    def __init__(self, image: Image.Image, scale_factor: float, detect_qr: bool = True):
-        super().__init__()
-        self.image = image
-        self.scale_factor = scale_factor
-        self.detect_qr = detect_qr
-
-    def run(self):
-        qr_list = []
-        if self.detect_qr:
-            qr_list = EntityDetector.detect_qr_codes(self.image, self.scale_factor)
-        boxes = OCREngine.get_instance().detect(self.image, self.scale_factor)
-        self.finished.emit(boxes, qr_list)
 
 
 class ImageTaskWorker(QThread):
@@ -203,13 +187,19 @@ class OverlayWindow(QWidget):
             self.close()
 
     def _start_ocr(self):
-        self.ocr_worker = OCRWorker(
-            self.captured.image,
-            scale_factor=self.captured.scale_factor,
-            detect_qr=self.config.auto_detect_qr,
-        )
-        self.ocr_worker.finished.connect(self._on_ocr_finished)
-        self.ocr_worker.start()
+        self.analysis_cache = screen_analysis_cache()
+        self.analysis_key = self.analysis_cache.key(self.captured, self.config)
+        cached = self.analysis_cache.lookup(self.analysis_key)
+        if cached is not None:
+            self._on_ocr_finished(*cached)
+            return
+        self.analysis_cache.ready.connect(self._on_analysis_ready)
+        self.analysis_cache.start(self.analysis_key, self.captured, self.config)
+
+    def _on_analysis_ready(self, key, result):
+        if key == self.analysis_key and result is not None:
+            # Each overlay receives its own data, isolated from cached results.
+            self._on_ocr_finished(*self.analysis_cache.clone_result(result))
 
     def _on_ocr_finished(self, boxes: List[TextBox], qr_list: List[QREntity]):
         self.ocr_boxes = boxes
@@ -597,6 +587,11 @@ class OverlayWindow(QWidget):
         self.close()
 
     def closeEvent(self, event):
+        if hasattr(self, "analysis_cache"):
+            try:
+                self.analysis_cache.ready.disconnect(self._on_analysis_ready)
+            except (TypeError, RuntimeError):
+                pass
         if hasattr(self, "anim_timer") and self.anim_timer.isActive():
             self.anim_timer.stop()
         self.closed.emit()

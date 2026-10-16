@@ -155,7 +155,7 @@ class OCREngine:
             texts = list(pool.map(lambda c: self._tesseract_line(c[1]), crops))
         return [(pts, t, 0.9) for (pts, _), t in zip(crops, texts)]
 
-    def detect(self, image: Image.Image, scale_factor: float = 1.0) -> List[TextBox]:
+    def detect(self, image: Image.Image, scale_factor: float = 1.0, *, raise_errors: bool = False) -> List[TextBox]:
         """Runs OCR on physical image and normalizes bounding boxes to logical UI coordinates."""
         img_np = np.array(image)
         try:
@@ -202,6 +202,8 @@ class OCREngine:
             return boxes
         except Exception as e:
             print(f"[OCREngine] Detection error: {e}")
+            if raise_errors:
+                raise
             return []
 
     @staticmethod

@@ -73,6 +73,8 @@ Mở **Click to Do** từ menu ứng dụng hoặc chạy `click-to-do` để v�
 
 `click-to-do settings` > tab Phím tắt tự nhận diện compositor và có thể ghi giúp bạn các phím (mặc định `Mod+Shift+C` chụp, `Mod+Alt+C` lấy màu). Chi tiết từng compositor và đoạn cấu hình thủ công: [docs/SHORTCUTS.md](docs/SHORTCUTS.md).
 
+Mở lại overlay trên cùng nội dung màn hình sẽ dùng ngay box OCR/QR đã có. Daemon giữ tối đa 6 kết quả trong RAM trong 5 phút; ảnh, màn hình, tỉ lệ hiển thị hoặc cấu hình OCR thay đổi sẽ nhận diện lại. Cache không ghi ảnh hay chữ xuống đĩa và mất khi thoát daemon. Đồng hồ/video thay đổi cũng làm cache hết khớp.
+
 ## OCR tiếng Việt và model
 
 PP-OCR gốc làm mất dấu thanh tiếng Việt, nên app dùng RapidOCR để tìm dòng chữ rồi dùng Tesseract `vie+eng` đọc từng dòng. Cài `tesseract` và dùng Cài đặt > Tải & khởi động model. Gợi ý LLM cục bộ và model tách nền: [docs/MODELS.md](docs/MODELS.md).
