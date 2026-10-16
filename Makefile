@@ -1,5 +1,5 @@
 # Click to Do Linux — Build & Packaging Automation
-.PHONY: sync install dev-install uninstall daemon capture settings stop build clean
+.PHONY: sync install dev-install uninstall daemon office capture settings stop build clean
 
 sync:
 	uv sync
@@ -15,6 +15,9 @@ uninstall:
 
 daemon:
 	uv run click-to-do daemon
+
+office:
+	uv run click-to-do office
 
 capture:
 	uv run click-to-do capture

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Click to Do for Linux — one-shot installer for Arch, Debian/Ubuntu, Fedora, openSUSE and derivatives.
 #
-#   ./install.sh                 install deps + app + desktop integration
+#   ./install.sh                 install deps + app + session-aware desktop integration
 #   ./install.sh --no-deps       skip system packages (you installed them yourself)
 #   ./install.sh --with-ollama   also install Ollama (local LLM runtime)
 #   ./install.sh --yes           no confirmation prompts
@@ -95,7 +95,7 @@ uv tool install --python "$PY_VERSION" --reinstall --force "$SRC_DIR"
 export PATH="$HOME/.local/bin:$PATH"
 have click-to-do || die "click-to-do not on PATH; add ~/.local/bin to PATH"
 
-say "Setting up desktop launcher, icon and systemd user service"
+say "Setting up desktop launchers, icons and session-aware background startup"
 click-to-do install
 
 if [ "$OLLAMA" = 1 ] && ! have ollama && [ "$family" != arch ]; then

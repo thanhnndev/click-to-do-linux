@@ -1,5 +1,5 @@
 [Unit]
-Description=Click to Do Linux Resident Daemon & Bar Tray
+Description=Click to Do Linux Workbench Timers, Reminders & Screen Tools
 After=graphical-session.target
 PartOf=graphical-session.target
 
