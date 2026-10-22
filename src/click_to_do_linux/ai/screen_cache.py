@@ -85,7 +85,9 @@ class ScreenAnalysisCache(QObject):
         try:
             qr = EntityDetector.detect_qr_codes(image, scale) if detect_qr else []
             boxes = OCREngine.get_instance().detect(image, scale, raise_errors=True)
-            result = (boxes, qr)
+            links = EntityDetector.detect_links(boxes)
+            links = OCREngine.refine_links(image, links, scale)
+            result = (boxes, qr, links)
         except Exception as exc:
             print(f'[ScreenCache] Analysis failed: {exc}')
             result = None

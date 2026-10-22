@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import List, Optional, Tuple
 import numpy as np
@@ -118,7 +118,7 @@ class OCREngine:
             print(f"[OCREngine] NPU detection unavailable: {e}")
 
     @staticmethod
-    def _tesseract_line(crop: Image.Image) -> str:
+    def _tesseract_line(crop: Image.Image, *, url_mode: bool = False) -> str:
         """Reads one text line with Tesseract (vie+eng) so Vietnamese diacritics are preserved."""
         w, h = crop.size
         if h < 48:  # small UI text: upscale for the LSTM recognizer
@@ -128,11 +128,51 @@ class OCREngine:
         with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
             crop.save(tmp.name)
             env = dict(os.environ, TESSDATA_PREFIX=str(get_tessdata_dir()), OMP_THREAD_LIMIT="1")
+            command = ["tesseract", tmp.name, "-", "-l", "eng" if url_mode else "vie+eng",
+                       "--psm", "7", "--dpi", "150"]
+            if url_mode:
+                command += ["-c", "load_system_dawg=0", "-c", "load_freq_dawg=0"]
             out = subprocess.run(
-                ["tesseract", tmp.name, "-", "-l", "vie+eng", "--psm", "7", "--dpi", "150"],
+                command,
                 capture_output=True, text=True, env=env, timeout=10,
             )
         return " ".join(out.stdout.split())
+
+    @staticmethod
+    def refine_links(image: Image.Image, links, scale_factor: float = 1.0):
+        """Re-read detected URL fragments in English on the analysis worker.
+
+        Bilingual prose OCR can confuse I/l/1 in case-sensitive paths. Accept
+        only those narrow character differences; preserve the original URL if
+        the second pass disagrees about its structure or cannot read a crop.
+        """
+        from .entities import EntityDetector
+
+        if not links or not tesseract_ready():
+            return links
+        scale = scale_factor if scale_factor > 0 else 1.0
+        confusables = str.maketrans({"I": "l", "1": "l", "|": "l"})
+
+        def read_link(link):
+            try:
+                parts = []
+                for x, y, w, h in link.rects:
+                    crop = image.crop((max(0, int(x * scale) - 3), max(0, int(y * scale) - 3),
+                                       min(image.width, int((x + w) * scale) + 3),
+                                       min(image.height, int((y + h) * scale) + 3)))
+                    part = OCREngine._tesseract_line(crop, url_mode=True)
+                    if not part or any(char.isspace() for char in part):
+                        return link
+                    parts.append(part)
+                urls = EntityDetector.extract_urls("".join(parts))
+                if len(urls) == 1 and urls[0].translate(confusables) == link.text.translate(confusables):
+                    return replace(link, text=urls[0])
+            except (OSError, subprocess.TimeoutExpired, ValueError):
+                pass
+            return link
+
+        with ThreadPoolExecutor(max_workers=min(4, len(links))) as pool:
+            return list(pool.map(read_link, links))
 
     def _detect_hybrid(self, image: Image.Image, img_np: np.ndarray):
         """RapidOCR finds text lines; Tesseract reads them. Returns [(pts, text, conf)] or None."""

@@ -10,6 +10,9 @@ _STRINGS: dict[str, dict[str, str]] = {
     "explain": {"vi": "Giải thích", "en": "Explain"},
     "ask": {"vi": "Hỏi AI", "en": "Ask"},
     "ask_placeholder": {"vi": "Hỏi AI về đoạn đã chọn...", "en": "Ask AI about selection..."},
+    "copy_link": {"vi": "Sao chép liên kết", "en": "Copy Link"},
+    "merge_paragraph": {"vi": "Bỏ xuống dòng", "en": "Remove line breaks"},
+    "merge_paragraph_hint": {"vi": "Gộp các dòng thành một đoạn khi sao chép chữ", "en": "Join wrapped lines into one paragraph when copying text"},
     "open_link": {"vi": "Mở liên kết", "en": "Open Link"},
     "email": {"vi": "Gửi email", "en": "Email"},
     "search": {"vi": "Tìm kiếm", "en": "Search"},
@@ -33,8 +36,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     "find_placeholder": {"vi": "Tìm chữ trên màn hình (Ctrl+F)...", "en": "Find text on screen (Ctrl+F)..."},
     "pick_color": {"vi": "Chọn màu", "en": "Pick Color"},
     "copy_image": {"vi": "Sao chép ảnh", "en": "Copy Image"},
-    "copy_region_text": {"vi": "Sao chép toàn bộ chữ", "en": "Copy All Text"},
-    "copy_all": {"vi": "Sao chép toàn bộ chữ", "en": "Copy All Text"},
+    "copy_region_text": {"vi": "Sao chép chữ", "en": "Copy Text"},
+    "copy_all": {"vi": "Sao chép chữ", "en": "Copy Text"},
     # Tray
     "tray_tooltip": {
         "vi": "Click to Do — Chuột trái: chụp màn hình | Chuột phải: menu",

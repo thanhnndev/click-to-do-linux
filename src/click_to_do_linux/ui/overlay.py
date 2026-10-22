@@ -17,9 +17,10 @@ from PyQt6.QtGui import (
     QPen,
     QShortcut,
 )
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QToolButton, QWidget
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
+from qfluentwidgets import LineEdit, PillPushButton
 
-from ..ai.entities import QREntity
+from ..ai.entities import EntityDetector, LinkEntity, QREntity
 from ..ai.screen_cache import screen_analysis_cache
 from ..ai.llm import LLMService
 from ..ai.ocr import OCREngine, TextBox
@@ -65,6 +66,10 @@ class OverlayWindow(QWidget):
 
         self.ocr_boxes: List[TextBox] = []
         self.qr_entities: List[QREntity] = []
+        self.link_entities: List[LinkEntity] = []
+        self.selected_link: Optional[LinkEntity] = None
+        self.hovered_link: Optional[LinkEntity] = None
+        self.region_text_mode = False
         self.redacted_patches: List[Tuple[QRect, Image.Image]] = []
 
         self.selection_start: Optional[QPoint] = None
@@ -123,26 +128,28 @@ class OverlayWindow(QWidget):
         top_layout.setContentsMargins(8, 5, 8, 5)
         top_layout.setSpacing(6)
 
-        self.search_input = QLineEdit(self.top_bar)
+        self.search_input = LineEdit(self.top_bar)
         self.search_input.setObjectName("QuickInput")
         self.search_input.setPlaceholderText(t("find_placeholder"))
         self.search_input.setFixedWidth(220)
         self.search_input.textChanged.connect(self._on_search_changed)
         top_layout.addWidget(self.search_input)
 
-        self.color_btn = QToolButton(self.top_bar)
-        self.color_btn.setText(" " + t("pick_color"))
+        # PushButton keeps the icon on the left, a Fluent ToolButton would draw
+        # the icon in the middle, on top of the label.
+        self.color_btn = PillPushButton(self.top_bar)
+        self.color_btn.setCheckable(False)
+        self.color_btn.setText(t("pick_color"))
         self.color_btn.setIcon(get_icon("pipette", theme_color("#e4e4e7", self.config.ui_theme), 14))
         self.color_btn.setIconSize(QSize(14, 14))
-        self.color_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.color_btn.clicked.connect(self._toggle_color_picker)
         top_layout.addWidget(self.color_btn)
 
-        self.copy_all_btn = QToolButton(self.top_bar)
-        self.copy_all_btn.setText(" " + t("copy_all"))
+        self.copy_all_btn = PillPushButton(self.top_bar)
+        self.copy_all_btn.setCheckable(False)
+        self.copy_all_btn.setText(t("copy_all"))
         self.copy_all_btn.setIcon(get_icon("text", theme_color("#e4e4e7", self.config.ui_theme), 14))
         self.copy_all_btn.setIconSize(QSize(14, 14))
-        self.copy_all_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.copy_all_btn.clicked.connect(self._copy_all_screen_text)
         top_layout.addWidget(self.copy_all_btn)
 
@@ -201,9 +208,10 @@ class OverlayWindow(QWidget):
             # Each overlay receives its own data, isolated from cached results.
             self._on_ocr_finished(*self.analysis_cache.clone_result(result))
 
-    def _on_ocr_finished(self, boxes: List[TextBox], qr_list: List[QREntity]):
+    def _on_ocr_finished(self, boxes: List[TextBox], qr_list: List[QREntity], links=None):
         self.ocr_boxes = boxes
         self.qr_entities = qr_list
+        self.link_entities = links if links is not None else EntityDetector.detect_links(boxes)
         self.update()
 
     def _on_anim_tick(self):
@@ -247,6 +255,15 @@ class OverlayWindow(QWidget):
                 painter.setPen(QPen(QColor(255, 255, 255, 26), 1))
                 painter.setBrush(QBrush(QColor(255, 255, 255, 8)))
                 painter.drawRoundedRect(bx, by, bw, bh, 3, 3)
+
+        # Links are independent screen entities, visible before any selection.
+        for link in self.link_entities:
+            active = link == self.selected_link or link == self.hovered_link
+            painter.setPen(QPen(QColor(56, 189, 248, 255 if active else 190), 2 if active else 1.2))
+            painter.setBrush(QBrush(QColor(56, 189, 248, 65 if active else 20)))
+            for lx, ly, lw, lh in link.rects:
+                painter.drawRoundedRect(lx - 2, ly - 1, lw + 4, lh + 2, 3, 3)
+                painter.drawLine(lx, ly + lh, lx + lw, ly + lh)
 
         # 4. Draw QR boxes
         for qr in self.qr_entities:
@@ -383,6 +400,11 @@ class OverlayWindow(QWidget):
         """Double-click any text box to immediately copy it and close overlay."""
         if event.button() == Qt.MouseButton.LeftButton:
             pos = event.pos()
+            link = self._link_at(pos)
+            if link and not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+                ClipboardManager.copy_text(link.text)
+                self.close()
+                return
             box = OCREngine.find_box_at(self.ocr_boxes, pos.x(), pos.y())
             if box:
                 ClipboardManager.copy_text(box.text)
@@ -424,19 +446,28 @@ class OverlayWindow(QWidget):
             if (pos - self.selection_start).manhattanLength() > 5:
                 self.is_dragging = True
                 self.selected_boxes.clear()
+                self.selected_link = None
+                self.hovered_link = None
+                self.region_text_mode = False
                 self.action_bar.hide()
                 self.selection_end = pos
                 self.selected_rect = QRect(self.selection_start, self.selection_end).normalized()
                 self.update()
             return
 
-        new_hover = OCREngine.find_box_at(self.ocr_boxes, pos.x(), pos.y())
-        if new_hover != self.hovered_box:
+        link = self._link_at(pos)
+        new_hover = None if link else OCREngine.find_box_at(self.ocr_boxes, pos.x(), pos.y())
+        if new_hover != self.hovered_box or link != self.hovered_link:
             self.hovered_box = new_hover
-            self.setCursor(
-                Qt.CursorShape.IBeamCursor if new_hover else Qt.CursorShape.CrossCursor
-            )
+            self.hovered_link = link
+            self.setToolTip(link.text if link else "")
+            self.setCursor(Qt.CursorShape.PointingHandCursor if link else
+                           Qt.CursorShape.IBeamCursor if new_hover else Qt.CursorShape.CrossCursor)
             self.update()
+
+    def _link_at(self, pos):
+        return next((link for link in self.link_entities
+                     if link.contains_point(pos.x(), pos.y())), None)
 
     def mouseReleaseEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton or self.color_picker_active:
@@ -454,8 +485,10 @@ class OverlayWindow(QWidget):
                 modifiers = event.modifiers()
                 # If Shift is held during drag, force Text mode; otherwise show Image bar (with Copy Text button if text exists)
                 if (modifiers & Qt.KeyboardModifier.ShiftModifier) and text_inside:
-                    self._show_actions_for_text(text_inside, r_tuple)
+                    self.region_text_mode = True
+                    self._show_actions_for_text(text_inside, r_tuple, region=True)
                 else:
+                    self.region_text_mode = False
                     crop = SegmentationEngine.crop_logical_region(
                         self.captured.image, r_tuple, self.captured.scale_factor
                     )
@@ -464,10 +497,26 @@ class OverlayWindow(QWidget):
             self.update()
             return
 
+        self.selected_link = None
+        self.region_text_mode = False
+
+        # A link takes precedence over OCR line boxes, but Shift still selects text.
+        link = self._link_at(pos)
+        if link and not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+            self.selected_link = link
+            self.selected_boxes.clear()
+            self.selected_rect = None
+            self.action_bar.show_for_link(link.text)
+            self.action_bar.reposition(link.rect, self.width(), self.height())
+            self.update()
+            return
+
         # 2. Direct Click on QR
         for qr in self.qr_entities:
             qx, qy, qw, qh = qr.rect
             if QRect(qx, qy, qw, qh).contains(pos):
+                self.selected_boxes.clear()
+                self.selected_rect = None
                 self.action_bar.show_for_qr(qr.text, qr.is_url)
                 self.action_bar.reposition(qr.rect, self.width(), self.height())
                 return
@@ -484,6 +533,7 @@ class OverlayWindow(QWidget):
                 self.selected_boxes = [box]
 
             if self.selected_boxes:
+                self.selected_boxes.sort(key=lambda b: (b.rect[1] // 14, b.rect[0]))
                 combined_text = "\n".join(b.text for b in self.selected_boxes)
                 min_x = min(b.rect[0] for b in self.selected_boxes)
                 min_y = min(b.rect[1] for b in self.selected_boxes)
@@ -491,7 +541,10 @@ class OverlayWindow(QWidget):
                 max_y = max(b.rect[1] + b.rect[3] for b in self.selected_boxes)
                 union_rect = (min_x, min_y, max_x - min_x, max_y - min_y)
                 self.selected_rect = QRect(*union_rect)
-                self._show_actions_for_text(combined_text, union_rect)
+                self._show_actions_for_text(combined_text, union_rect, region=len(self.selected_boxes) > 1)
+            else:
+                self.selected_rect = None
+                self.action_bar.hide()
             self.update()
         else:
             self.selected_boxes.clear()
@@ -499,15 +552,22 @@ class OverlayWindow(QWidget):
             self.action_bar.hide()
             self.update()
 
-    def _show_actions_for_text(self, text: str, rect_tuple: Tuple[int, int, int, int]):
-        urls = EntityDetector.extract_urls(text)
+    def _show_actions_for_text(self, text: str, rect_tuple: Tuple[int, int, int, int], *, region=False):
         emails = EntityDetector.extract_emails(text)
-        self.action_bar.show_for_text(text, urls=urls, emails=emails)
+        self.action_bar.show_for_text(text, emails=emails, region=region)
         self.action_bar.reposition(rect_tuple, self.width(), self.height())
 
     def _handle_copy_shortcut(self):
-        if self.selected_boxes:
-            ClipboardManager.copy_text("\n".join(b.text for b in self.selected_boxes))
+        if self.selected_link:
+            ClipboardManager.copy_text(self.selected_link.text)
+            self.close()
+        elif self.region_text_mode and self.selected_rect:
+            rect = self.selected_rect.normalized()
+            text = OCREngine.get_text_in_selection(self.ocr_boxes, rect.x(), rect.y(), rect.width(), rect.height())
+            ClipboardManager.copy_text(self.action_bar.text_for_copy(text))
+            self.close()
+        elif self.selected_boxes:
+            ClipboardManager.copy_text(self.action_bar.text_for_copy("\n".join(b.text for b in self.selected_boxes)))
             self.close()
         elif self.selected_rect and not self.selected_rect.isNull():
             rect = self.selected_rect.normalized()
