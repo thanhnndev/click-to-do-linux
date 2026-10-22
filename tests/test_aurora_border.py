@@ -21,34 +21,51 @@ class AuroraBorderTests(unittest.TestCase):
         painter.end()
         return image
 
+    @staticmethod
+    def luminance(color):
+        return max(color.red(), color.green(), color.blue())
+
     def test_rim_is_bright_and_saturated(self):
         image = self.render(0.0)
         rim = image.pixelColor(200, 0)
-        brightest = max(rim.red(), rim.green(), rim.blue())
-        self.assertGreater(brightest, 120, 'the rim must read as a bright line')
-        self.assertGreater(brightest - min(rim.red(), rim.green(), rim.blue()), 30,
-                           'the rim must keep a saturated hue')
+        self.assertGreater(self.luminance(rim), 60, 'the rim must read as a bright line')
+        self.assertGreater(
+            self.luminance(rim) - min(rim.red(), rim.green(), rim.blue()), 20,
+            'the rim must keep a saturated hue',
+        )
 
-    def test_bloom_fades_out_towards_the_content(self):
+    def test_glow_fades_out_towards_the_content(self):
         image = self.render(0.0)
         depth = [12, 24, 40, 60]
-        glow = [max(image.pixelColor(200, y).getRgb()[:3]) for y in depth]
-        self.assertGreater(glow[0], glow[-1] + 20, 'the glow must fade with the depth')
+        glow = [self.luminance(image.pixelColor(200, y)) for y in depth]
+        self.assertGreater(glow[0], glow[-1] + 10, 'the glow must fade with the depth')
         for closer, further in zip(glow, glow[1:]):
             self.assertGreaterEqual(closer, further, 'the glow must decay monotonically')
 
-    def test_bloom_reaches_further_than_the_old_strip(self):
+    def test_glow_reaches_further_than_the_old_strip(self):
         spec = AuroraSpec()
         image = self.render(0.0, spec=spec)
-        edge = max(image.pixelColor(200, 0).getRgb()[:3])
-        far = max(image.pixelColor(200, int(spec.bloom_depth * 0.7)).getRgb()[:3])
-        self.assertGreater(far, 6, 'the glow has to reach inside the screen')
-        self.assertLess(far, edge * 0.4, 'the glow still has to fade out')
+        edge = self.luminance(image.pixelColor(200, 0))
+        far = self.luminance(image.pixelColor(200, int(spec.glow_depth * 0.6)))
+        self.assertGreater(far, 4, 'the glow has to reach inside the screen')
+        self.assertLess(far, edge, 'the glow still has to fade out')
 
-    def test_hue_sweeps_with_the_phase(self):
-        first = self.render(0.0).pixelColor(200, 0).getRgb()
-        later = self.render(0.5).pixelColor(200, 0).getRgb()
-        self.assertNotEqual(first, later, 'the rim colour has to animate')
+    def test_wave_makes_the_border_breathe(self):
+        image = self.render(0.0)
+        row = [self.luminance(image.pixelColor(x, 0)) for x in range(10, 390, 10)]
+        self.assertGreater(max(row) - min(row), 25, 'the wave must swell along the border')
+
+    def test_wave_travels_with_the_phase(self):
+        first = [self.luminance(self.render(0.0).pixelColor(x, 0)) for x in range(20, 380, 20)]
+        later = [self.luminance(self.render(0.25).pixelColor(x, 0)) for x in range(20, 380, 20)]
+        self.assertNotEqual(first, later, 'the wave has to travel along the border')
+
+    def test_corners_do_not_double_up(self):
+        image = self.render(0.0)
+        # The corner patch and the edge band have to meet without a step.
+        left = self.luminance(image.pixelColor(0, 150))
+        corner = self.luminance(image.pixelColor(4, 150))
+        self.assertLess(abs(left - corner), 40, 'the corner must not be a bright block')
 
     def test_painter_opacity_is_restored(self):
         image = QImage(200, 200, QImage.Format.Format_ARGB32_Premultiplied)

@@ -224,7 +224,7 @@ class OverlayWindow(QWidget):
         now = time.monotonic()
         if self._anim_origin is None:
             self._anim_origin = now
-        self.glow_phase = ((now - self._anim_origin) / AURORA.rotation_period) % 1.0
+        self.glow_phase = ((now - self._anim_origin) / AURORA.wave_period) % 1.0
         self.update()
 
     def paintEvent(self, event):
