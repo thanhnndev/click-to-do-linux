@@ -68,7 +68,7 @@ class AuroraBorderTests(unittest.TestCase):
         # A real wave is not one flat colour: different points along the
         # border must carry different hues at the same instant.
         image = self.render(0.0)
-        hues = {image.pixelColor(x, 0).hue() for x in (50, 200, 350)}
+        hues = {image.pixelColor(x, 20).hue() for x in (50, 200, 350)}
         self.assertGreater(len(hues), 1, 'the border must not be a single flat colour')
 
     def test_painter_opacity_is_restored(self):
