@@ -257,8 +257,41 @@ class OverlayWindow(QWidget):
             if self.processed_pixmap is not None and not self.processed_pixmap.isNull():
                 painter.drawPixmap(r, self.processed_pixmap)
             if self.processing_image:
-                painter.setPen(QPen(QColor(56, 189, 248, 240), 2))
-                painter.setBrush(QBrush(QColor(56, 189, 248, 40)))
+                # Animated processing border: travelling hue around the rect +
+                # pulsing glow, similar to the aurora wave border.
+                import math
+                phase = self.glow_phase
+                pulse = 0.6 + 0.4 * (0.5 + 0.5 * math.sin(2 * math.pi * phase * 2))
+                # Outer glow
+                for i in range(4, 0, -1):
+                    alpha = int(120 * pulse * (5 - i) / 5.0)
+                    painter.setPen(QPen(QColor(56, 189, 248, alpha), 2 + i * 2))
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawRoundedRect(r.adjusted(-i * 2, -i * 2, i * 2, i * 2), 8 + i, 8 + i)
+                # Four sides, each with a phase-shifted colour so the hue travels.
+                sides = [
+                    (r.left(), r.top(), r.right(), r.top(), 0.0),      # top
+                    (r.right(), r.top(), r.right(), r.bottom(), 0.25), # right
+                    (r.left(), r.bottom(), r.right(), r.bottom(), 0.5),# bottom
+                    (r.left(), r.top(), r.left(), r.bottom(), 0.75),  # left
+                ]
+                for x1, y1, x2, y2, off in sides:
+                    hue_phase = (phase + off) % 1.0
+                    # map hue_phase to a colour from the copilot palette-ish
+                    col = QColor(56, 189, 248)
+                    if hue_phase < 0.25:
+                        col = QColor(56, 189, 248)
+                    elif hue_phase < 0.5:
+                        col = QColor(129, 140, 248)
+                    elif hue_phase < 0.75:
+                        col = QColor(192, 132, 252)
+                    else:
+                        col = QColor(244, 114, 182)
+                    painter.setPen(QPen(col, 2.5))
+                    painter.drawLine(x1, y1, x2, y2)
+                # Overlay tint + label
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(QColor(9, 9, 12, 90)))
                 painter.drawRoundedRect(r, 6, 6)
                 painter.setPen(QColor("#f4f4f5"))
                 painter.setFont(QFont("sans-serif", 11, QFont.Weight.Bold))
