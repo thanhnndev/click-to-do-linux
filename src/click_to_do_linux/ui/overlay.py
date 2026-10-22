@@ -366,7 +366,13 @@ class OverlayWindow(QWidget):
         painter.drawText(bx + 32, by + 20, hex_code)
 
     def _draw_windows11_glowing_border(self, painter: QPainter):
-        """Draws the signature Windows 11 / Copilot iridescent animated border."""
+        """Draws the signature Windows 11 / Copilot iridescent animated border.
+
+        While processing an image the border wave "rolls back" (is hidden) and
+        the aurora overlay lives on the selected region instead.
+        """
+        if self.processing_image:
+            return
         draw_aurora_border(painter, self.width(), self.height(), self.glow_phase, AURORA)
 
     def mouseDoubleClickEvent(self, event):
