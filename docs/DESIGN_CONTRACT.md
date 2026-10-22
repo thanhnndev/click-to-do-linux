@@ -117,24 +117,22 @@ Dáng thanh cuộn trong `tokens.css` (từ `* { --scrollbar-thumb` đến hết
 
 Overlay là công cụ trên ảnh chụp nên viền do **app** tự vẽ (`ui/aurora.py`), không dùng widget Fluent.
 
-**Hình dạng:** viền "sóng" — một **conic gradient quay** (bảng màu Copilot) chạy quanh mép màn hình, kèm quầng sáng mờ vào trong (4 strip theo 4 cạnh, màu chạy theo sweep) và một đường highlight trắng mờ bên trong. Đây chính là cảm giác "wave" của Windows 11 / Copilot Click to Do.
-
-Tham chiếu: Windows 11 / Copilot "moving border" (conic gradient quay + inward glow).
+**Hình dạng:** viền "sóng nhấp nhô" — **inner edge của glow là sine wave** chạy dọc theo mép màn hình, glow phình ra/thu vào như sóng biển lăn. Màu cũng chạy theo sóng. **Không có outline hình vuông, không có các vòng đồng tâm.**
 
 | Token | Giá trị | Ghi chú |
 | --- | --- | --- |
-| `--aurora-rim` | 8px | Viền neon conic gradient quay |
-| `--aurora-glow` | 72px, alpha 0.55 × pulse | Quầng sáng mờ vào trong, 4 cạnh, màu chạy theo sweep |
-| `--aurora-highlight` | 1px trắng, alpha 42 × pulse | Đường highlight bên trong |
-| `--aurora-period` | 7s / vòng | Tốc độ quay của sweep |
-| `--aurora-pulse` | biên độ 0.18 | Nhịp thở của quầng sáng |
+| `--aurora-glow` | 50px ± 22px amplitude | Glow phình theo sine wave |
+| `--aurora-wave` | 2 sóng/chu vi, 5s/vòng | Sóng chạy dọc mép |
+| `--aurora-rim` | 6px | Viền neon ở mép màn hình |
+| `--aurora-strength` | 0.9 | Độ sáng glow |
 
 **Quy tắc bắt buộc:**
 
-1. **Một conic gradient duy nhất** cho cả chu vi, quay theo phase. Không vẽ từng cạnh riêng — đó là lý do bản cũ có seam ở 4 góc và đọc ra như các vòng đồng tâm.
-2. **Quầng sáng là 4 linear gradient** (mỗi cạnh một cái), màu lấy từ bảng màu theo phase với offset khác nhau để chạy cùng sweep, không phải màu tĩnh.
-3. Chỉ vẽ vector, không dựng buffer ngoài. Khôi phục `painter.setOpacity(1.0)` trước khi trả về.
-4. Không patch QSS cho viền — đây là phần app tự sở hữu.
+1. **Inner edge là sine wave**, không phải đường thẳng hay hình vuông.
+2. **Glow phình ra/thu vào** theo sóng — sáng hơn ở crest (sóng đẩy sâu vào), tối hơn ở trough.
+3. **Màu chạy theo sóng** — hue thay đổi dọc theo mép.
+4. Chỉ vẽ vector, không dựng buffer ngoài.
+5. Không patch QSS cho viền — đây là phần app tự sở hữu.
 
 ### 4.1 Vùng (D6) — đặt tên một lần
 
