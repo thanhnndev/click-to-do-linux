@@ -115,21 +115,27 @@ Dáng thanh cuộn trong `tokens.css` (từ `* { --scrollbar-thumb` đến hết
 
 ### 1.6 Viền aurora của overlay chụp màn hình
 
-Overlay là công cụ trên ảnh chụp nên viền do **app** tự vẽ (`ui/aurora.py`), không dùng widget Fluent. Tham chiếu: Windows 11 / Copilot "moving border" (conic gradient quay + mask ring).
+Overlay là công cụ trên ảnh chụp nên viền do **app** tự vẽ (`ui/aurora.py`), không dùng widget Fluent.
+
+**Hình dạng:** một *sóng ánh sáng* lăn quanh mép màn hình (như sóng biển), không phải các vòng đồng tâm. Crest sáng chạy vòng quanh chu vi, trough chìm xuống, màu chạy theo crest.
+
+Tham chiếu: moving border của CSS (conic gradient + `@property --angle`) và các hiệu ứng "liquid" (hai shape quay lệch tốc độ để không lặp).
 
 | Token | Giá trị | Ghi chú |
 | --- | --- | --- |
-| `--aurora-rim` | 6.5px | Viền neon sát cạnh màn hình |
-| `--aurora-halo` | 14px, alpha 0.28 | Quầng sáng mờ ngoài viền |
-| `--aurora-core` | 1.6px, alpha 0.6 | Chân tóc sáng ở mép trong của viền |
-| `--aurora-bloom` | 84px, alpha 92/255 | Quầng trong, mờ dần theo `exp(-d/30)` |
-| `--aurora-rotation` | 7s / vòng | Quét sắc màu, 1.5 nhịp thở trong mỗi vòng |
+| `--aurora-rim` | 8px, strength 1.0, profile plateau | Viền neon sát cạnh, sáng đều rồi tắt ở mép trong |
+| `--aurora-glow` | 82px, strength 0.6, `exp(-d/22)` | Quầng trong, mờ dần về phía nội dung |
+| `--aurora-wave` | 2.5 sóng, biên độ điều biến 0.18 | Sóng dài + sóng chậm chồng lên, không lặp |
+| `--aurora-period` | 9s / vòng | Tốc độ sóng, tính theo wall-clock |
+| `--aurora-hue` | 1 vòng bảng màu / vòng sóng | Màu chạy cùng crest |
 
 **Quy tắc bắt buộc:**
 
-1. **Một gradient nón duy nhất** cho cả chu vi. Tuyệt đối không set phase khác nhau cho từng cạnh — đó là lý do bản cũ có đường seam ở 4 góc.
-2. **Quầng trong vẽ bằng 4 linear gradient** (mỗi cạnh một cái, alpha curve nằm trong các stop). Vẽ bằng chồng các stroke lồng nhau thì đẹp hơn một chút nhưng **44ms/khung ở 1080p**; dạng band chỉ **2ms/khung**.
-3. Chỉ vẽ vector, không dựng buffer ngoài. Mọi thao tác phải khôi phục `painter.setOpacity(1.0)` trước khi trả về, nếu không phần vẽ sau trong `paintEvent` sẽ bị nhạt màu.
+1. **Sóng chạy theo cung vòng chu vi (arc length), không theo góc.** Gradient nón là hàm theo góc → sóng sẽ trườn chậm ở cạnh dài và chạy nhanh ở cạnh ngắn. Mỗi cột texture phải mang giá trị sóng tại vị trí cung vòng của nó.
+2. **Sóng = texture, không phải gradient nón.** Texture chứa cả hai: gradient ngang theo cung vòng (màu + alpha của sóng) × `CompositionMode_DestinationIn` với gradient suy giảm theo độ sâu. Conic gradient đắt (~23ns/px) và phải chồng nhiều lớp để có fade → **44ms/khung ở 1080p**; texture là **1.8ms/khung**.
+3. **Góc là patch riêng.** Hai band cạnh chồng lên ở góc sẽ cộng dồn thành khối vuông sáng. Band dừng trước góc, góc dùng mask khoảng cách tới mép gần nhất (`min` của hai hướng, smooth-max để khỏi nếp 45°), mask build 1 lần rồi cache.
+4. **Chỉ 2 dải: rim + glow.** Cả hai đều theo sóng → viền không bao giờ đọc ra như các vòng đồng tâm.
+5. Mọi thao tác phải khôi phục `painter.setOpacity(1.0)` trước khi trả về, nếu không phần vẽ sau trong `paintEvent` sẽ bị nhạt màu.
 
 ## 2. Hợp đồng nguyên tố (D1) — bảy thứ, chốt một lần
 
