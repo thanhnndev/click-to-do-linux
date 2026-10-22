@@ -250,57 +250,40 @@ class OverlayWindow(QWidget):
         # 2.5 Signature Windows 11 / Copilot glowing border aura
         self._draw_windows11_glowing_border(painter)
 
-        # 2.6 Image processing: show the processed result in place of the crop,
-        #     and a processing overlay (border + label) while busy.
+        # 2.6 Image processing: keep the frame open. While busy, show a
+        #     loading overlay across the whole image + an animated wave border
+        #     (same aurora wave as the screen border) around the selection.
+        #     When done, composite the processed result onto the background.
         if self.processed_rect is not None:
             r = self.processed_rect
             if self.processed_pixmap is not None and not self.processed_pixmap.isNull():
                 painter.drawPixmap(r, self.processed_pixmap)
             if self.processing_image:
-                # Animated processing border: travelling hue around the rect +
-                # pulsing glow, similar to the aurora wave border.
-                import math
-                phase = self.glow_phase
-                pulse = 0.6 + 0.4 * (0.5 + 0.5 * math.sin(2 * math.pi * phase * 2))
-                # Outer glow
-                for i in range(4, 0, -1):
-                    alpha = int(120 * pulse * (5 - i) / 5.0)
-                    painter.setPen(QPen(QColor(56, 189, 248, alpha), 2 + i * 2))
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    painter.drawRoundedRect(r.adjusted(-i * 2, -i * 2, i * 2, i * 2), 8 + i, 8 + i)
-                # Four sides, each with a phase-shifted colour so the hue travels.
-                sides = [
-                    (r.left(), r.top(), r.right(), r.top(), 0.0),      # top
-                    (r.right(), r.top(), r.right(), r.bottom(), 0.25), # right
-                    (r.left(), r.bottom(), r.right(), r.bottom(), 0.5),# bottom
-                    (r.left(), r.top(), r.left(), r.bottom(), 0.75),  # left
-                ]
-                for x1, y1, x2, y2, off in sides:
-                    hue_phase = (phase + off) % 1.0
-                    # map hue_phase to a colour from the copilot palette-ish
-                    col = QColor(56, 189, 248)
-                    if hue_phase < 0.25:
-                        col = QColor(56, 189, 248)
-                    elif hue_phase < 0.5:
-                        col = QColor(129, 140, 248)
-                    elif hue_phase < 0.75:
-                        col = QColor(192, 132, 252)
-                    else:
-                        col = QColor(244, 114, 182)
-                    painter.setPen(QPen(col, 2.5))
-                    painter.drawLine(x1, y1, x2, y2)
-                # Overlay tint + label
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QBrush(QColor(9, 9, 12, 90)))
-                painter.drawRoundedRect(r, 6, 6)
-                painter.setPen(QColor("#f4f4f5"))
-                painter.setFont(QFont("sans-serif", 11, QFont.Weight.Bold))
-                painter.drawText(r, Qt.AlignmentFlag.AlignCenter, t("processing"))
-        elif self.processing_image:
-            # Fallback: whole-screen processing indicator.
-            painter.setPen(QPen(QColor(56, 189, 248, 240), 2))
-            painter.setBrush(QBrush(QColor(56, 189, 248, 40)))
-            painter.drawRoundedRect(self.rect().adjusted(8, 8, -8, -8), 8, 8)
+                # Wave border around the selection (reuse aurora, scoped to rect).
+                painter.save()
+                painter.translate(r.x(), r.y())
+                draw_aurora_border(painter, r.width(), r.height(), self.glow_phase, AURORA)
+                painter.restore()
+        if self.processing_image:
+            # Full-screen loading overlay across the entire captured image.
+            painter.fillRect(self.rect(), QColor(9, 9, 12, 150))
+            import math
+            phase = self.glow_phase
+            cx = self.width() // 2
+            cy = self.height() // 2
+            # Animated spinner arc
+            pen = QPen(QColor(56, 189, 248, 230), 4)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            span = int(120 + 60 * (0.5 + 0.5 * math.sin(2 * math.pi * phase)))
+            start_angle = int(phase * 360 * 16)
+            painter.drawArc(cx - 28, cy - 28, 56, 56, start_angle, span * 16)
+            # Pulsing label
+            alpha = int(180 + 75 * (0.5 + 0.5 * math.sin(2 * math.pi * phase * 1.5)))
+            painter.setPen(QColor(244, 244, 245, alpha))
+            painter.setFont(QFont("sans-serif", 13, QFont.Weight.Bold))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "\n\n" + t("processing"))
 
         # 3. Draw OCR text highlights
         for box in self.ocr_boxes:

@@ -29,3 +29,11 @@ PY
   processed result in place of the original crop (so the user can review/copy).
   Result is still copied to clipboard (and saved for cutout).
 - New i18n key: "processing".
+
+### Image processing UX (revised)
+- Processing border now uses the same animated aurora wave as the screen border
+  (scoped to the selection rect) instead of a static hue-per-side border.
+- Loading overlay now covers the entire captured image (dimming + animated
+  spinner + pulsing label), not just the selection.
+- When done: frame stays open and the processed result is composited onto the
+  background (crop region replaced), so the result is seen in full context.
