@@ -19,6 +19,7 @@ dependencies = [
     "rapidocr>=3.9.2",
     "rembg>=2.0.85",
     "requests>=2.34.2",
+    "pyqt6-fluent-widgets[full]>=1.11.3",
 ]
 
 [project.urls]
