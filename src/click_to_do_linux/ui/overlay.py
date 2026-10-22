@@ -10,6 +10,7 @@ from PyQt6.QtGui import (
     QBrush,
     QColor,
     QFont,
+    QImage,
     QKeySequence,
     QPainter,
     QPen,
@@ -85,6 +86,12 @@ class OverlayWindow(QWidget):
         self.color_picker_active = False
         self.cursor_pos = QPoint(0, 0)
         self.img_worker: Optional[ImageTaskWorker] = None
+        # Image-processing state: keep the capture frame open and show the
+        # processed result in place of the original crop (better UX).
+        self.processing_image: bool = False
+        self.processed_image: Optional[Image.Image] = None
+        self.processed_rect: Optional[QRect] = None
+        self.processed_pixmap: Optional[QPixmap] = None
 
         # Windows 11 Copilot Glowing Border Aura animation state
         self.glow_phase = 0.0
@@ -243,6 +250,25 @@ class OverlayWindow(QWidget):
         # 2.5 Signature Windows 11 / Copilot glowing border aura
         self._draw_windows11_glowing_border(painter)
 
+        # 2.6 Image processing: show the processed result in place of the crop,
+        #     and a processing overlay (border + label) while busy.
+        if self.processed_rect is not None:
+            r = self.processed_rect
+            if self.processed_pixmap is not None and not self.processed_pixmap.isNull():
+                painter.drawPixmap(r, self.processed_pixmap)
+            if self.processing_image:
+                painter.setPen(QPen(QColor(56, 189, 248, 240), 2))
+                painter.setBrush(QBrush(QColor(56, 189, 248, 40)))
+                painter.drawRoundedRect(r, 6, 6)
+                painter.setPen(QColor("#f4f4f5"))
+                painter.setFont(QFont("sans-serif", 11, QFont.Weight.Bold))
+                painter.drawText(r, Qt.AlignmentFlag.AlignCenter, t("processing"))
+        elif self.processing_image:
+            # Fallback: whole-screen processing indicator.
+            painter.setPen(QPen(QColor(56, 189, 248, 240), 2))
+            painter.setBrush(QBrush(QColor(56, 189, 248, 40)))
+            painter.drawRoundedRect(self.rect().adjusted(8, 8, -8, -8), 8, 8)
+
         # 3. Draw OCR text highlights
         for box in self.ocr_boxes:
             bx, by, bw, bh = box.rect
@@ -368,6 +394,11 @@ class OverlayWindow(QWidget):
             self.selection_start = pos
             self.selection_end = pos
             self.is_dragging = False
+            # A new interaction clears any previous image-processing result.
+            self.processing_image = False
+            self.processed_image = None
+            self.processed_rect = None
+            self.processed_pixmap = None
 
     def mouseMoveEvent(self, event):
         pos = event.pos()
@@ -534,9 +565,17 @@ class OverlayWindow(QWidget):
             EntityDetector.search_web(str(payload), engine=self.config.search_engine)
             self.close()
         elif action_name in ("remove_bg", "blur_bg"):
+            self.processing_image = True
+            self.processed_image = None
+            self.processed_pixmap = None
+            if self.selected_rect and not self.selected_rect.isNull():
+                self.processed_rect = self.selected_rect.normalized()
+            else:
+                self.processed_rect = None
             self.img_worker = ImageTaskWorker(action_name, payload)
             self.img_worker.finished.connect(self._on_image_task_done)
             self.img_worker.start()
+            self.update()
         elif action_name == "save_image":
             save_dir = Path(self.config.save_directory)
             save_dir.mkdir(parents=True, exist_ok=True)
@@ -572,6 +611,7 @@ class OverlayWindow(QWidget):
             self.ai_dialog.raise_()
 
     def _on_image_task_done(self, task_name: str, result_img):
+        self.processing_image = False
         if result_img:
             ClipboardManager.copy_image(result_img)
             if task_name == "remove_bg":
@@ -579,7 +619,17 @@ class OverlayWindow(QWidget):
                 save_dir.mkdir(parents=True, exist_ok=True)
                 fn = save_dir / f"cutout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
                 result_img.save(fn)
-        self.close()
+            # Keep the capture frame open and show the processed result in
+            # place of the original crop so the user can review / copy again.
+            self.processed_image = result_img
+            try:
+                from PyQt6.QtGui import QPixmap as _QP
+                data = result_img.convert("RGBA").tobytes("raw", "RGBA")
+                qimg = QImage(data, result_img.width, result_img.height, result_img.width * 4, QImage.Format.Format_RGBA8888)
+                self.processed_pixmap = QPixmap.fromImage(qimg)
+            except Exception:
+                self.processed_pixmap = None
+        self.update()
 
     def closeEvent(self, event):
         if hasattr(self, "analysis_cache"):

@@ -22,6 +22,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     "cutting": {"vi": "Đang tách...", "en": "Cutting..."},
     "blur_bg": {"vi": "Làm mờ nền", "en": "Blur BG"},
     "blurring": {"vi": "Đang làm mờ...", "en": "Blurring..."},
+    "processing": {"vi": "Đang xử lý...", "en": "Processing..."},
     "redact": {"vi": "Che thông tin", "en": "Redact"},
     "copy_text": {"vi": "Sao chép chữ", "en": "Copy Text"},
     "save": {"vi": "Lưu ảnh", "en": "Save"},

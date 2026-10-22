@@ -22,3 +22,10 @@
 - `docs/DESIGN_CONTRACT.md` §1.6 rewritten for the wave border (tokens + rules).
 - Tests: `tests/test_aurora_border.py` (7 cases).
 PY
+## Image processing UX (overlay)
+- While running remove_bg / blur_bg: keep the capture frame open and draw a
+  processing border + "Đang xử lý..." label over the selected region.
+- After the task finishes: do not close the frame; instead render the
+  processed result in place of the original crop (so the user can review/copy).
+  Result is still copied to clipboard (and saved for cutout).
+- New i18n key: "processing".
