@@ -38,13 +38,13 @@ COPILOT_PALETTE = ((56, 189, 248), (129, 140, 248), (192, 132, 252), (244, 114, 
 @dataclass(frozen=True)
 class AuroraSpec:
     rim_width: float = 6.0
-    glow_depth: float = 36.0
-    wave_amplitude: float = 12.0
-    wave_count: float = 2.0
+    glow_depth: float = 24.0
+    wave_amplitude: float = 8.0
+    wave_count: float = 3.5
     wave_period: float = 5.0
     glow_strength: float = 0.9
-    second_wave_count: float = 3.0
-    second_wave_amplitude: float = 7.0
+    second_wave_count: float = 5.0
+    second_wave_amplitude: float = 4.0
     second_wave_strength: float = 0.35
     second_wave_phase: float = 0.37
 
@@ -196,15 +196,6 @@ def draw_aurora_border(
               spec.second_wave_strength, spec.second_wave_phase)
     right_band(spec.second_wave_count, spec.second_wave_amplitude,
                spec.second_wave_strength, spec.second_wave_phase)
-
-    # Rim: a thick line along the outer edge with the travelling hue.
-    rim_color = _phase_color(phase, 0.0)
-    painter.setPen(QPen(
-        QColor(rim_color.red(), rim_color.green(), rim_color.blue(),
-               int(255 * spec.glow_strength)), spec.rim_width))
-    painter.setBrush(Qt.BrushStyle.NoBrush)
-    painter.drawRect(QRectF(spec.rim_width / 2.0, spec.rim_width / 2.0,
-                            w - spec.rim_width, h - spec.rim_width))
 
     painter.setPen(QPen())
     painter.setBrush(QBrush())
