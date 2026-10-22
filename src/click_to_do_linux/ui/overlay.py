@@ -1,18 +1,16 @@
 """Zero-Scroll Niri Floating Overlay with Live Screen Search, Color Picker, and Rich Click-to-Do UX."""
 
-import math
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 from PIL import Image
-from PyQt6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QBrush,
     QColor,
-    QConicalGradient,
     QFont,
     QKeySequence,
-    QLinearGradient,
     QPainter,
     QPen,
     QShortcut,
@@ -30,10 +28,15 @@ from ..config import Config, load_config
 from ..utils.clipboard import ClipboardManager
 from .action_bar import ActionBar
 from .ai_dialog import AIDialog
+from .aurora import AuroraSpec, draw_aurora_border
 from ..i18n import t
 from .icons import get_icon
 from .theme import overlay_style
 from .palette import apply_input_palette, theme_color
+
+
+# Tunables of the animated border, shared by the overlay and the tests.
+AURORA = AuroraSpec()
 
 
 class ImageTaskWorker(QThread):
@@ -85,6 +88,7 @@ class OverlayWindow(QWidget):
 
         # Windows 11 Copilot Glowing Border Aura animation state
         self.glow_phase = 0.0
+        self._anim_origin: Optional[float] = None
         self.anim_timer = QTimer(self)
         self.anim_timer.setInterval(28)  # ~35 FPS smooth ambient aura
         self.anim_timer.timeout.connect(self._on_anim_tick)
@@ -215,7 +219,12 @@ class OverlayWindow(QWidget):
         self.update()
 
     def _on_anim_tick(self):
-        self.glow_phase = (self.glow_phase + 0.006) % 1.0
+        # The hue sweep runs on the wall clock, so the speed does not depend
+        # on the timer resolution.
+        now = time.monotonic()
+        if self._anim_origin is None:
+            self._anim_origin = now
+        self.glow_phase = ((now - self._anim_origin) / AURORA.rotation_period) % 1.0
         self.update()
 
     def paintEvent(self, event):
@@ -319,82 +328,8 @@ class OverlayWindow(QWidget):
         painter.drawText(bx + 32, by + 20, hex_code)
 
     def _draw_windows11_glowing_border(self, painter: QPainter):
-        """Draws signature Windows 11 / Copilot Click to Do iridescent animated glowing border."""
-        w = float(self.width())
-        h = float(self.height())
-        if w <= 0 or h <= 0:
-            return
-
-        pulse = 0.82 + 0.18 * math.sin(self.glow_phase * 2.0 * math.pi)
-        center = QPointF(w / 2.0, h / 2.0)
-        angle = (self.glow_phase * 360.0) % 360.0
-
-        # Signature Windows 11 Copilot Palette: Sky Blue (#38bdf8), Indigo (#818cf8), Purple (#c084fc), Pink (#f472b6)
-        conical = QConicalGradient(center, angle)
-        conical.setColorAt(0.00, QColor("#38bdf8"))
-        conical.setColorAt(0.25, QColor("#818cf8"))
-        conical.setColorAt(0.50, QColor("#c084fc"))
-        conical.setColorAt(0.75, QColor("#f472b6"))
-        conical.setColorAt(1.00, QColor("#38bdf8"))
-
-        def get_phase_color(offset: float, alpha: int) -> QColor:
-            stops = [
-                (0.00, (56, 189, 248)),
-                (0.25, (129, 140, 248)),
-                (0.50, (192, 132, 252)),
-                (0.75, (244, 114, 182)),
-                (1.00, (56, 189, 248)),
-            ]
-            t = (self.glow_phase + offset) % 1.0
-            for i in range(len(stops) - 1):
-                t0, c0 = stops[i]
-                t1, c1 = stops[i + 1]
-                if t0 <= t <= t1:
-                    factor = (t - t0) / (t1 - t0)
-                    r = int(c0[0] + factor * (c1[0] - c0[0]))
-                    g = int(c0[1] + factor * (c1[1] - c0[1]))
-                    b = int(c0[2] + factor * (c1[2] - c0[2]))
-                    return QColor(r, g, b, alpha)
-            return QColor(56, 189, 248, alpha)
-
-        glow_depth = 28.0
-        edge_alpha = int(50 * pulse)
-
-        # 1. Soft inward glow strips along the 4 edges
-        c_top = get_phase_color(0.75, edge_alpha)
-        g_top = QLinearGradient(0, 0, 0, glow_depth)
-        g_top.setColorAt(0.0, c_top)
-        g_top.setColorAt(1.0, QColor(c_top.red(), c_top.green(), c_top.blue(), 0))
-        painter.fillRect(QRectF(0, 0, w, glow_depth), g_top)
-
-        c_bottom = get_phase_color(0.25, edge_alpha)
-        g_bottom = QLinearGradient(0, h, 0, h - glow_depth)
-        g_bottom.setColorAt(0.0, c_bottom)
-        g_bottom.setColorAt(1.0, QColor(c_bottom.red(), c_bottom.green(), c_bottom.blue(), 0))
-        painter.fillRect(QRectF(0, h - glow_depth, w, glow_depth), g_bottom)
-
-        c_left = get_phase_color(0.50, edge_alpha)
-        g_left = QLinearGradient(0, 0, glow_depth, 0)
-        g_left.setColorAt(0.0, c_left)
-        g_left.setColorAt(1.0, QColor(c_left.red(), c_left.green(), c_left.blue(), 0))
-        painter.fillRect(QRectF(0, 0, glow_depth, h), g_left)
-
-        c_right = get_phase_color(0.00, edge_alpha)
-        g_right = QLinearGradient(w, 0, w - glow_depth, 0)
-        g_right.setColorAt(0.0, c_right)
-        g_right.setColorAt(1.0, QColor(c_right.red(), c_right.green(), c_right.blue(), 0))
-        painter.fillRect(QRectF(w - glow_depth, 0, glow_depth, h), g_right)
-
-        # 2. Crisp outer radiant perimeter border (3.5px width)
-        pen = QPen(QBrush(conical), 3.5)
-        painter.setPen(pen)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRect(QRectF(1.75, 1.75, w - 3.5, h - 3.5))
-
-        # 3. Delicate inner highlight line
-        inner_pen = QPen(QColor(255, 255, 255, int(42 * pulse)), 1.0)
-        painter.setPen(inner_pen)
-        painter.drawRect(QRectF(3.5, 3.5, w - 7.0, h - 7.0))
+        """Draws the signature Windows 11 / Copilot iridescent animated border."""
+        draw_aurora_border(painter, self.width(), self.height(), self.glow_phase, AURORA)
 
     def mouseDoubleClickEvent(self, event):
         """Double-click any text box to immediately copy it and close overlay."""
