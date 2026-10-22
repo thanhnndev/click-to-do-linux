@@ -38,13 +38,13 @@ COPILOT_PALETTE = ((56, 189, 248), (129, 140, 248), (192, 132, 252), (244, 114, 
 @dataclass(frozen=True)
 class AuroraSpec:
     rim_width: float = 6.0
-    glow_depth: float = 24.0
-    wave_amplitude: float = 8.0
-    wave_count: float = 3.5
+    glow_depth: float = 18.0
+    wave_amplitude: float = 4.0
+    wave_count: float = 5.0
     wave_period: float = 5.0
     glow_strength: float = 0.9
-    second_wave_count: float = 5.0
-    second_wave_amplitude: float = 4.0
+    second_wave_count: float = 7.0
+    second_wave_amplitude: float = 2.5
     second_wave_strength: float = 0.35
     second_wave_phase: float = 0.37
 
