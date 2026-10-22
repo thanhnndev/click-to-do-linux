@@ -15,6 +15,7 @@ from .config import load_config
 from .daemon import APP_ID, ClickToDoDaemon, print_bar_status_json, send_command_to_daemon
 from .installer import install_system_integration, uninstall_system_integration
 from .ui.icons import get_icon
+from .ui.fluent_theme import apply_app_font, sync_fluent_theme
 from .ui.overlay import OverlayWindow
 
 
@@ -25,10 +26,12 @@ def run_capture(color_mode: bool = False):
 
     QGuiApplication.setDesktopFileName(APP_ID)
     app = QApplication.instance() or QApplication(sys.argv)
+    apply_app_font(app)
     icon = QIcon.fromTheme("click-to-do", get_icon("app_logo", "#38bdf8", 32))
     app.setWindowIcon(icon)
 
     cfg = load_config()
+    sync_fluent_theme(cfg.ui_theme)
     if not cfg.setup_completed:
         run_settings()
         return

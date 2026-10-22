@@ -6,22 +6,28 @@ import subprocess
 from pathlib import Path
 from PyQt6.QtCore import QSignalBlocker, QSize, QTime, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QPlainTextEdit,
-    QLineEdit,
-    QProgressBar,
-    QScrollArea,
-    QSpinBox,
-    QTimeEdit,
-    QTabWidget,
-    QPushButton,
     QVBoxLayout,
     QWidget,
+)
+from qfluentwidgets import (
+    CheckBox,
+    ComboBox,
+    EditableComboBox,
+    LineEdit,
+    PlainTextEdit,
+    PrimaryPushButton,
+    ProgressBar,
+    PushButton,
+    ScrollArea,
+    SpinBox,
+    TabCloseButtonDisplayMode,
+    TabWidget,
+    TimeEdit,
+    TogglePushButton,
 )
 
 from ..ai.llm import LLMService
@@ -35,6 +41,13 @@ from .. import compositor as comp_mod
 DEFAULT_CAPTURE = comp_mod.DEFAULT_CAPTURE_KEY
 DEFAULT_COLOR = comp_mod.DEFAULT_COLOR_KEY
 from .icons import get_icon
+from .fluent_theme import sync_fluent_theme
+from .typography import label as app_label
+try:
+    from qfluentwidgets import InfoBar, InfoBarPosition
+except Exception:  # pragma: no cover
+    InfoBar = None
+    InfoBarPosition = None
 from .palette import apply_input_palette, theme_color, theme_colors, theme_stylesheet
 
 # (ollama tag, display label). Sizes are Ollama q4_K_M downloads; see README for the full table.
@@ -94,186 +107,31 @@ class SetupWindow(QWidget):
         self.config: Config = load_config()
         self.theme = self.config.ui_theme if self.config.ui_theme in ("light", "dark") else "dark"
         set_lang(self.config.ui_language)
+        self.setObjectName("SettingsPage")
         self.setWindowTitle(t("set_title"))
         if not embedded:
             self.setMinimumSize(640, 560)
             self.resize(780, 760)
 
-        arrow_path = get_config_dir() / "chevron-down.svg"
-        if not arrow_path.exists():
-            arrow_path.write_text(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
-                encoding="utf-8",
-            )
-        arrow_url = arrow_path.as_posix()
-
-        self._base_stylesheet = f"""
-            QWidget {{
-                background-color: #09090b;
+        # Layout, cards and typography only. Every control is a Fluent widget
+        # and keeps the stylesheet shipped by the library.
+        self._base_stylesheet = """
+            QWidget {
                 color: #f4f4f5;
-                font-family: "Inter", "Noto Sans", system-ui, sans-serif;
-                font-size: 13px;
-            }}
-            QLabel {{ background: transparent; }}
-            QFrame#Card {{
+            }
+            QWidget#SettingsPage { background-color: #09090b; }
+            QStackedWidget { background: transparent; }
+            QLabel { background: transparent; }
+            ScrollArea > QWidget > QWidget { background: transparent; }
+            QFrame#Card {
                 background-color: #121215;
                 border: 1px solid #27272a;
-                border-radius: 8px;
-            }}
-            QLabel#HeaderTitle {{
-                font-size: 16px;
-                font-weight: 600;
-                color: #ffffff;
-            }}
-            QLabel#HeaderSub {{
-                font-size: 12px;
-                color: #71717a;
-            }}
-            QLabel#CardTitle {{
-                font-size: 12px;
-                font-weight: 600;
-                color: #a1a1aa;
-                background: transparent;
-            }}
-            QLabel#Muted {{
-                font-size: 11px;
-                color: #71717a;
-                background: transparent;
-            }}
-            QComboBox {{
-                background-color: #18181b;
-                border: 1px solid #27272a;
-                border-radius: 6px;
-                padding: 6px 30px 6px 12px;
-                color: #e4e4e7;
-                font-size: 12px;
-                min-height: 24px;
-            }}
-            QComboBox:hover {{
-                border: 1px solid #3f3f46;
-            }}
-            QComboBox:focus {{
-                border: 1px solid #38bdf8;
-            }}
-            QComboBox:editable {{
-                background: #18181b;
-            }}
-            QComboBox QLineEdit {{
-                background: transparent;
-                color: #e4e4e7;
-                border: none;
-                font-size: 12px;
-            }}
-            QComboBox::drop-down {{
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 26px;
-                border-left: 1px solid #27272a;
-                border-top-right-radius: 6px;
-                border-bottom-right-radius: 6px;
-                background-color: #18181b;
-            }}
-            QComboBox::down-arrow {{
-                image: url("{arrow_url}");
-                width: 12px;
-                height: 12px;
-            }}
-            QComboBox::down-arrow:hover {{
-                image: url("{arrow_url}");
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: #18181b;
-                border: 1px solid #3f3f46;
-                border-radius: 6px;
-                selection-background-color: #27272a;
-                selection-color: #38bdf8;
-                color: #e4e4e7;
-                padding: 4px;
-                outline: none;
-            }}
-            QPushButton {{
-                background-color: #f4f4f5;
-                color: #09090b;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: 600;
-                min-height: 22px;
-            }}
-            QPushButton:hover {{
-                background-color: #ffffff;
-            }}
-            QPushButton:disabled {{
-                background-color: #27272a;
-                color: #71717a;
-            }}
-            QPushButton#Secondary {{
-                background-color: #18181b;
-                color: #e4e4e7;
-                border: 1px solid #27272a;
-                font-weight: 500;
-                min-height: 22px;
-            }}
-            QPushButton#Secondary:hover {{
-                background-color: #27272a;
-                color: #ffffff;
-                border: 1px solid #3f3f46;
-            }}
-            QTabWidget::pane {{ border: none; }}
-            QTabBar::tab {{
-                background: transparent; color: #71717a; padding: 8px 16px;
-                border: none; border-bottom: 2px solid transparent; font-size: 12px; font-weight: 600;
-            }}
-            QTabBar::tab:selected {{ color: #ffffff; border-bottom: 2px solid #38bdf8; }}
-            QTabBar::tab:hover {{ color: #e4e4e7; }}
-            QLineEdit {{
-                background-color: #18181b; border: 1px solid #27272a; border-radius: 6px;
-                padding: 6px 10px; color: #e4e4e7; font-size: 12px; min-height: 24px;
-            }}
-            QLineEdit:focus {{ border: 1px solid #38bdf8; }}
-            QPlainTextEdit {{
-                background-color: #0c0c0f; border: 1px solid #27272a; border-radius: 6px;
-                color: #a5f3fc; font-family: "JetBrains Mono", "Fira Code", monospace; font-size: 11px; padding: 6px;
-            }}
-            QPushButton#Danger {{
-                background-color: #18181b;
-                color: #f87171;
-                border: 1px solid #3f1d1d;
-                font-weight: 500;
-                min-height: 22px;
-            }}
-            QPushButton#Danger:hover {{
-                background-color: #2a1212;
-                border: 1px solid #f87171;
-            }}
-            QProgressBar {{
-                border: 1px solid #27272a;
-                border-radius: 4px;
-                background-color: #18181b;
-                max-height: 6px;
-                text-align: center;
-            }}
-            QProgressBar::chunk {{
-                background-color: #38bdf8;
-                border-radius: 3px;
-            }}
-        """
-        self._base_stylesheet = self._base_stylesheet.replace("#71717a", "#a1a1aa")
-        self._base_stylesheet += """
-            QSpinBox, QTimeEdit { background: #0c0c0f; color: #f4f4f5; border: 1px solid #3f3f46; border-radius: 6px; padding: 7px; min-height: 24px; }
-            QSpinBox:focus, QTimeEdit:focus { border-color: #38bdf8; }
-            QSpinBox:disabled, QTimeEdit:disabled { color: #a1a1aa; background: #18181b; }
-            QCheckBox { background: transparent; color: #f4f4f5; spacing: 9px; padding: 5px 0; }
-            QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #a1a1aa; border-radius: 4px; background: #0c0c0f; }
-            QCheckBox::indicator:checked { background: #38bdf8; border-color: #38bdf8; }
-            QScrollArea { border: none; background: transparent; }
-            QScrollArea > QWidget > QWidget { background: transparent; }
-            QScrollBar:vertical { width: 9px; background: transparent; }
-            QScrollBar::handle:vertical { min-height: 30px; background: #3f3f46; border-radius: 4px; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-            QPushButton#ThemeChoice { background: #18181b; color: #f4f4f5; border: 1px solid #3f3f46; }
-            QPushButton#ThemeChoice:checked { background: #123044; color: #7dd3fc; border-color: #38bdf8; }
+                border-radius: 12px;
+            }
+            QLabel#HeaderTitle { font-size: 16px; font-weight: 600; }
+            QLabel#HeaderSub { font-size: 12px; }
+            QLabel#CardTitle { font-size: 12px; font-weight: 600; background: transparent; }
+            QLabel#Muted { font-size: 11px; background: transparent; }
         """
         self._build_ui()
         self.set_theme(self.theme)
@@ -290,37 +148,11 @@ class SetupWindow(QWidget):
     def set_theme(self, theme):
         self.theme = "light" if theme == "light" else "dark"
         self.config.ui_theme = self.theme
-        arrow = get_config_dir() / f"chevron-down-{self.theme}.svg"
-        stroke = theme_color("#a1a1aa", self.theme)
-        arrow.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{stroke}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>', encoding="utf-8")
-        base = self._base_stylesheet.replace("chevron-down.svg", arrow.name)
-        style = theme_stylesheet(base, self.theme)
-        if self.theme == "light":
-            style += """
-                QPushButton { background: #0f172a; color: #ffffff; }
-                QPushButton:hover { background: #1e293b; color: #ffffff; }
-                QPushButton#Secondary, QPushButton#ThemeChoice { background: #f1f5f9; color: #1e293b; border: 1px solid #94a3b8; }
-                QPushButton#Secondary:hover, QPushButton#ThemeChoice:hover { background: #e2e8f0; color: #0f172a; }
-                QPushButton#ThemeChoice:checked { background: #e0f2fe; color: #075985; border: 1px solid #0369a1; }
-                QPushButton#Primary { background: #0369a1; color: #ffffff; }
-                QPushButton#Primary:hover { background: #075985; color: #ffffff; }
-                QPushButton#Danger { background: #fff1f2; color: #b91c1c; border: 1px solid #fda4af; }
-                QPushButton#Danger:hover { background: #ffe4e6; color: #991b1b; }
-            """
-        arrows = {}
-        for direction, path in (("up", "m6 15 6-6 6 6"), ("down", "m6 9 6 6 6-6")):
-            icon = get_config_dir() / f"spin-{direction}-{self.theme}.svg"
-            icon.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="{stroke}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="{path}"/></svg>', encoding="utf-8")
-            arrows[direction] = icon.as_posix()
-        style += f"""
-            QSpinBox::up-button, QTimeEdit::up-button {{ subcontrol-origin: border; subcontrol-position: top right; width: 24px; border: none; background: transparent; }}
-            QSpinBox::down-button, QTimeEdit::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right; width: 24px; border: none; background: transparent; }}
-            QSpinBox::up-arrow, QTimeEdit::up-arrow {{ image: url("{arrows['up']}"); width: 11px; height: 9px; }}
-            QSpinBox::down-arrow, QTimeEdit::down-arrow {{ image: url("{arrows['down']}"); width: 11px; height: 9px; }}
-        """
+        sync_fluent_theme(self.theme)
+        style = theme_stylesheet(self._base_stylesheet, self.theme)
         self.setStyleSheet(style)
         apply_input_palette(self, self.theme)
-        for button in self.findChildren(QPushButton):
+        for button in self.findChildren(PushButton):
             metadata = button.property("theme_icon")
             if metadata:
                 name, color, size = metadata
@@ -346,28 +178,26 @@ class SetupWindow(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 14, 8, 10)
         layout.setSpacing(14)
-        scroll = QScrollArea()
+        scroll = ScrollArea()
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
+        # The viewport fills with the palette colour unless it is turned off.
+        scroll.viewport().setAutoFillBackground(False)
         scroll.setWidget(page)
         return scroll, layout
 
     def _build_appearance_tab(self):
         page, layout = self._scroll_page()
         card, content = self._make_card()
-        title = QLabel(t("theme_heading"))
-        title.setObjectName("CardTitle")
+        title = app_label(t("theme_heading"), "card_title")
         content.addWidget(title)
-        hint = QLabel(t("theme_hint"))
-        hint.setObjectName("Muted")
+        hint = app_label(t("theme_hint"), "muted")
         hint.setWordWrap(True)
         content.addWidget(hint)
         choices = QHBoxLayout()
         self.theme_choices = {}
         for theme, text, icon in (("light", "theme_light", "sun"), ("dark", "theme_dark", "moon")):
-            button = QPushButton(t(text))
-            button.setObjectName("ThemeChoice")
-            button.setCheckable(True)
+            button = TogglePushButton(t(text))
             button.setMinimumHeight(40)
             self._set_icon(button, icon, "#38bdf8", 18)
             button.clicked.connect(lambda checked=False, selected=theme: self._choose_theme(selected))
@@ -381,7 +211,7 @@ class SetupWindow(QWidget):
     def _settings_row(self, layout, label, control):
         row = QHBoxLayout()
         row.setSpacing(18)
-        text = QLabel(label)
+        text = app_label(label, "body")
         text.setWordWrap(True)
         row.addWidget(text, 1)
         row.addWidget(control)
@@ -391,23 +221,21 @@ class SetupWindow(QWidget):
         service = self.productivity_service
         page, layout = self._scroll_page()
         card, content = self._make_card()
-        title = QLabel(t("office_focus_section"))
-        title.setObjectName("CardTitle")
+        title = app_label(t("office_focus_section"), "card_title")
         content.addWidget(title)
-        hint = QLabel(t("workday_autosave"))
-        hint.setObjectName("Muted")
+        hint = app_label(t("workday_autosave"), "muted")
         hint.setWordWrap(True)
         content.addWidget(hint)
         self.duration_spins = {}
         for mode, key, low, high in (("focus", "office_focus_duration", 10, 90), ("short_break", "office_short_duration", 3, 30), ("long_break", "office_long_duration", 10, 45)):
-            spin = QSpinBox()
+            spin = SpinBox()
             spin.setRange(low, high)
             spin.setSuffix(" " + t("office_minutes"))
             spin.setValue(service.timer_minutes(mode))
             spin.valueChanged.connect(lambda value, selected=mode: service.set_timer_minutes(selected, value))
             self.duration_spins[mode] = spin
             self._settings_row(content, t(key), spin)
-        self.long_break_spin = QSpinBox()
+        self.long_break_spin = SpinBox()
         self.long_break_spin.setRange(2, 8)
         self.long_break_spin.setSuffix(" " + t("office_sessions"))
         self.long_break_spin.setValue(service.long_break_every)
@@ -415,15 +243,14 @@ class SetupWindow(QWidget):
         self._settings_row(content, t("office_long_every"), self.long_break_spin)
         layout.addWidget(card)
         card, content = self._make_card()
-        title = QLabel(t("office_health_section"))
-        title.setObjectName("CardTitle")
+        title = app_label(t("office_health_section"), "card_title")
         content.addWidget(title)
         self.reminder_controls = {}
         for key, label in (("water", "office_water"), ("movement", "office_movement")):
             row = QHBoxLayout()
-            enabled = QCheckBox(t(label))
+            enabled = CheckBox(t(label))
             enabled.toggled.connect(lambda checked, selected=key: service.set_reminder_enabled(selected, checked))
-            interval = QSpinBox()
+            interval = SpinBox()
             interval.setRange(15, 240)
             interval.setSingleStep(5)
             interval.setPrefix(t("office_every") + " ")
@@ -435,22 +262,21 @@ class SetupWindow(QWidget):
             self.reminder_controls[key] = (enabled, interval)
         layout.addWidget(card)
         card, content = self._make_card()
-        self.schedule_enabled = QCheckBox(t("office_schedule"))
+        self.schedule_enabled = CheckBox(t("office_schedule"))
         self.schedule_enabled.toggled.connect(service.set_schedule_enabled)
         content.addWidget(self.schedule_enabled)
-        self.weekdays_only = QCheckBox(t("office_weekdays"))
+        self.weekdays_only = CheckBox(t("office_weekdays"))
         self.weekdays_only.toggled.connect(service.set_weekdays_only)
         content.addWidget(self.weekdays_only)
-        self.work_start = QTimeEdit()
-        self.work_end = QTimeEdit()
+        self.work_start = TimeEdit()
+        self.work_end = TimeEdit()
         for edit in (self.work_start, self.work_end):
             edit.setDisplayFormat("HH:mm")
             edit.timeChanged.connect(self._set_work_hours)
         self._settings_row(content, t("workday_start"), self.work_start)
         self._settings_row(content, t("workday_end"), self.work_end)
         layout.addWidget(card)
-        background = QLabel(t("shell_background_hint"))
-        background.setObjectName("Muted")
+        background = app_label(t("shell_background_hint"), "muted")
         background.setWordWrap(True)
         layout.addWidget(background)
         layout.addStretch()
@@ -511,18 +337,17 @@ class SetupWindow(QWidget):
         # Header
         hdr = QVBoxLayout()
         hdr.setSpacing(2)
-        title = QLabel("Click to Do")
-        title.setObjectName("HeaderTitle")
-        sub = QLabel(t("set_sub"))
-        sub.setObjectName("HeaderSub")
+        title = app_label("Click to Do", "title")
+        sub = app_label(t("set_sub"), "caption")
         hdr.addWidget(title)
         hdr.addWidget(sub)
         if not self.embedded:
             root.addLayout(hdr)
 
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
-        self.tabs.tabBar().setDrawBase(False)
+        self.tabs = TabWidget()
+        # The tabs are static, the close and add buttons would only confuse.
+        self.tabs.tabBar.setCloseButtonDisplayMode(TabCloseButtonDisplayMode.NEVER)
+        self.tabs.tabBar.addButton.hide()
         root.addWidget(self.tabs, stretch=1)
         pages = []
         for title_key in ("tab_general", "tab_shortcuts", "tab_system"):
@@ -530,9 +355,11 @@ class SetupWindow(QWidget):
             lay = QVBoxLayout(page)
             lay.setContentsMargins(0, 12, 0, 0)
             lay.setSpacing(12)
-            scroll = QScrollArea()
+            scroll = ScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QFrame.Shape.NoFrame)
+            # The viewport fills with the palette colour unless it is turned off.
+            scroll.viewport().setAutoFillBackground(False)
             scroll.setWidget(page)
             self.tabs.addTab(scroll, t(title_key))
             if title_key == "tab_general":
@@ -542,11 +369,10 @@ class SetupWindow(QWidget):
 
         # Card 1: Vision & Cutout Model
         c1, l1 = self._make_card()
-        t1 = QLabel(t("card_cutout"))
-        t1.setObjectName("CardTitle")
+        t1 = app_label(t("card_cutout"), "card_title")
         l1.addWidget(t1)
 
-        self.bg_combo = QComboBox()
+        self.bg_combo = ComboBox()
         self.bg_combo.setMinimumHeight(32)
         self.bg_combo.addItem(t("cutout_fast"), "u2netp")
         self.bg_combo.addItem(t("cutout_precise"), "isnet-general-use")
@@ -556,7 +382,7 @@ class SetupWindow(QWidget):
         l1.addWidget(self.bg_combo)
         # OCR text-line detection backend: the NPU choice only exists on machines with an NPU
         if npu_mod.detect().present or self.config.ocr_det_backend == "npu":
-            self.det_combo = QComboBox()
+            self.det_combo = ComboBox()
             self.det_combo.setMinimumHeight(32)
             self.det_combo.addItem(t("ocr_det_cpu"), "cpu")
             self.det_combo.addItem(t("ocr_det_npu"), "npu")
@@ -568,12 +394,11 @@ class SetupWindow(QWidget):
 
         # Card 2: Vietnamese Local LLM (Ollama)
         c2, l2 = self._make_card()
-        t2 = QLabel(t("card_llm"))
-        t2.setObjectName("CardTitle")
+        t2 = app_label(t("card_llm"), "card_title")
         l2.addWidget(t2)
 
         row_be = QHBoxLayout()
-        self.backend_combo = QComboBox()
+        self.backend_combo = ComboBox()
         self.backend_combo.setMinimumHeight(32)
         self.backend_combo.addItem(t("llm_backend_ollama"), "ollama")
         # The NPU choice is offered only on machines that actually expose an NPU (or if already selected)
@@ -583,7 +408,7 @@ class SetupWindow(QWidget):
         self.backend_combo.setCurrentIndex(max(0, be_idx))
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
         row_be.addWidget(self.backend_combo, stretch=1)
-        self.keep_combo = QComboBox()
+        self.keep_combo = ComboBox()
         self.keep_combo.setMinimumHeight(32)
         for val, lbl in (("0", t("keep_now")), ("2m", "2 min"), ("10m", "10 min"), ("-1", t("keep_never"))):
             self.keep_combo.addItem(f"{t('llm_keepalive')}: {lbl}", val)
@@ -593,13 +418,11 @@ class SetupWindow(QWidget):
         l2.addLayout(row_be)
 
         row_llm = QHBoxLayout()
-        self.ollama_combo = QComboBox()
-        self.ollama_combo.setEditable(True)
+        self.ollama_combo = EditableComboBox()
         self.ollama_combo.setMinimumHeight(32)
         row_llm.addWidget(self.ollama_combo, stretch=1)
 
-        ref_btn = QPushButton(t("refresh"))
-        ref_btn.setObjectName("Secondary")
+        ref_btn = PushButton(t("refresh"))
         self._set_icon(ref_btn, "refresh", "#e4e4e7", 13)
         ref_btn.setIconSize(QSize(13, 13))
         ref_btn.setMinimumHeight(32)
@@ -608,7 +431,7 @@ class SetupWindow(QWidget):
         row_llm.addWidget(ref_btn)
         l2.addLayout(row_llm)
 
-        rec_lbl = QLabel(t("llm_hint"))
+        rec_lbl = app_label(t("llm_hint"), "body")
         self.llm_hint_lbl = rec_lbl
         rec_lbl.setObjectName("Muted")
         rec_lbl.setWordWrap(True)
@@ -617,12 +440,11 @@ class SetupWindow(QWidget):
 
         # Card 3: Target Language & Search Engine
         c3, l3 = self._make_card()
-        t3 = QLabel(t("card_prefs"))
-        t3.setObjectName("CardTitle")
+        t3 = app_label(t("card_prefs"), "card_title")
         l3.addWidget(t3)
 
         pref_row = QHBoxLayout()
-        self.lang_combo = QComboBox()
+        self.lang_combo = ComboBox()
         self.lang_combo.setMinimumHeight(32)
         self.lang_combo.addItem(f"{t('pref_target')}: Tiếng Việt", "vi")
         self.lang_combo.addItem(f"{t('pref_target')}: English", "en")
@@ -631,7 +453,7 @@ class SetupWindow(QWidget):
             self.lang_combo.setCurrentIndex(l_idx)
         pref_row.addWidget(self.lang_combo)
 
-        self.engine_combo = QComboBox()
+        self.engine_combo = ComboBox()
         self.engine_combo.setMinimumHeight(32)
         self.engine_combo.addItem(f"{t('pref_search')}: Google", "google")
         self.engine_combo.addItem(f"{t('pref_search')}: DuckDuckGo", "duckduckgo")
@@ -642,7 +464,7 @@ class SetupWindow(QWidget):
         pref_row.addWidget(self.engine_combo)
         l3.addLayout(pref_row)
 
-        self.ui_lang_combo = QComboBox()
+        self.ui_lang_combo = ComboBox()
         self.ui_lang_combo.setMinimumHeight(32)
         self.ui_lang_combo.addItem(f"{t('pref_ui')}: {t('ui_auto')}", "auto")
         self.ui_lang_combo.addItem(f"{t('pref_ui')}: Tiếng Việt", "vi")
@@ -655,47 +477,42 @@ class SetupWindow(QWidget):
 
         # Card 4: Model Cache & System Integration
         c4, l4 = self._make_card()
-        t4 = QLabel(t("card_cache"))
-        t4.setObjectName("CardTitle")
+        t4 = app_label(t("card_cache"), "card_title")
         l4.addWidget(t4)
 
-        self.progress_bar = QProgressBar()
+        self.progress_bar = ProgressBar()
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(False)
         l4.addWidget(self.progress_bar)
 
-        self.status_lbl = QLabel(t("status_ready"))
-        self.status_lbl.setObjectName("Muted")
+        self.status_lbl = app_label(t("status_ready"), "muted")
         self.status_lbl.setWordWrap(True)
         l4.addWidget(self.status_lbl)
 
         act_row = QHBoxLayout()
-        self.warmup_btn = QPushButton(t("btn_warmup"))
+        self.warmup_btn = PushButton(t("btn_warmup"))
         self._set_icon(self.warmup_btn, "download", "#e4e4e7", 13)
-        self.warmup_btn.setObjectName("Secondary")
         self.warmup_btn.setMinimumHeight(36)
         self.warmup_btn.clicked.connect(self._start_warmup)
         act_row.addWidget(self.warmup_btn)
 
-        self.install_btn = QPushButton(t("btn_install"))
+        self.install_btn = PushButton(t("btn_install"))
         self._set_icon(self.install_btn, "settings", "#e4e4e7", 13)
-        self.install_btn.setObjectName("Secondary")
         self.install_btn.setMinimumHeight(36)
         self.install_btn.clicked.connect(self._install_desktop_app)
         act_row.addWidget(self.install_btn)
         l4.addLayout(act_row)
 
         act_row2 = QHBoxLayout()
-        self.uninstall_btn = QPushButton(t("btn_uninstall"))
+        self.uninstall_btn = PushButton(t("btn_uninstall"))
         self._set_icon(self.uninstall_btn, "power", "#f87171", 13)
         self.uninstall_btn.setObjectName("Danger")
         self.uninstall_btn.setMinimumHeight(36)
         self.uninstall_btn.clicked.connect(self._uninstall_desktop_app)
         act_row2.addWidget(self.uninstall_btn)
 
-        self.about_btn = QPushButton(t("btn_about"))
+        self.about_btn = PushButton(t("btn_about"))
         self._set_icon(self.about_btn, "sparkles", "#e4e4e7", 13)
-        self.about_btn.setObjectName("Secondary")
         self.about_btn.setMinimumHeight(36)
         self.about_btn.clicked.connect(self._show_about)
         act_row2.addWidget(self.about_btn)
@@ -713,20 +530,18 @@ class SetupWindow(QWidget):
         # Footer
         footer = QHBoxLayout()
         footer.addStretch()
-        close_btn = QPushButton(t("btn_cancel"))
-        close_btn.setObjectName("Secondary")
+        close_btn = PushButton(t("btn_cancel"))
         close_btn.setMinimumHeight(32)
         close_btn.clicked.connect(self.close)
         if not self.embedded:
             footer.addWidget(close_btn)
 
-        self.apply_btn = QPushButton(t("btn_apply"))
-        self.apply_btn.setObjectName("Secondary" if not self.embedded else "Primary")
+        self.apply_btn = PushButton(t("btn_apply")) if not self.embedded else PrimaryPushButton(t("btn_apply"))
         self.apply_btn.setMinimumHeight(32)
         self.apply_btn.clicked.connect(self._apply)
         footer.addWidget(self.apply_btn)
 
-        save_btn = QPushButton(t("btn_save"))
+        save_btn = PrimaryPushButton(t("btn_save"))
         save_btn.setMinimumHeight(32)
         save_btn.clicked.connect(self._save_and_close)
         if not self.embedded:
@@ -760,7 +575,7 @@ class SetupWindow(QWidget):
             if idx >= 0:
                 self.ollama_combo.setCurrentIndex(idx)
             else:
-                self.ollama_combo.setEditText(self.config.openai_model)
+                self.ollama_combo.setText(self.config.openai_model)
             return
 
         added = set()
@@ -777,7 +592,7 @@ class SetupWindow(QWidget):
         if idx >= 0:
             self.ollama_combo.setCurrentIndex(idx)
         else:
-            self.ollama_combo.setEditText(self.config.ollama_model)
+            self.ollama_combo.setText(self.config.ollama_model)
 
     def _get_selected_ollama_model(self) -> str:
         data = self.ollama_combo.currentData()
@@ -818,16 +633,13 @@ class SetupWindow(QWidget):
     # ------------------------------------------------------------ diagnostics
     def _build_diag_card(self) -> QFrame:
         card, lay = self._make_card()
-        ttl = QLabel(t("card_diag"))
-        ttl.setObjectName("CardTitle")
+        ttl = app_label(t("card_diag"), "card_title")
         lay.addWidget(ttl)
-        self.diag_lbl = QLabel()
-        self.diag_lbl.setObjectName("Muted")
+        self.diag_lbl = app_label("", "muted")
         self.diag_lbl.setTextFormat(Qt.TextFormat.RichText)
         self.diag_lbl.setWordWrap(True)
         lay.addWidget(self.diag_lbl)
-        rb = QPushButton(t("refresh"))
-        rb.setObjectName("Secondary")
+        rb = PushButton(t("refresh"))
         self._set_icon(rb, "refresh", "#e4e4e7", 13)
         rb.clicked.connect(self._refresh_diag)
         lay.addWidget(rb)
@@ -877,15 +689,14 @@ class SetupWindow(QWidget):
         self.comp = comp_mod.detect()
 
         card, lay = self._make_card()
-        ttl = QLabel(t("card_detect"))
-        ttl.setObjectName("CardTitle")
+        ttl = app_label(t("card_detect"), "card_title")
         lay.addWidget(ttl)
-        self.comp_lbl = QLabel()
+        self.comp_lbl = app_label("", "body")
         self.comp_lbl.setTextFormat(Qt.TextFormat.RichText)
         self.comp_lbl.setWordWrap(True)
         lay.addWidget(self.comp_lbl)
 
-        self.comp_combo = QComboBox()
+        self.comp_combo = ComboBox()
         self.comp_combo.setMinimumHeight(32)
         for cid, nm in (
             ("niri", "Niri"), ("umbriel", "Umbriel"), ("hyprland", "Hyprland"), ("sway", "Sway"),
@@ -899,55 +710,50 @@ class SetupWindow(QWidget):
         layout.addWidget(card)
 
         card2, lay2 = self._make_card()
-        t2 = QLabel(t("card_keys"))
-        t2.setObjectName("CardTitle")
+        t2 = app_label(t("card_keys"), "card_title")
         lay2.addWidget(t2)
         row = QHBoxLayout()
-        self.cap_key = QLineEdit(DEFAULT_CAPTURE)
+        self.cap_key = LineEdit()
+        self.cap_key.setText(DEFAULT_CAPTURE)
         self.cap_key.setPlaceholderText(t("key_capture"))
-        self.col_key = QLineEdit(DEFAULT_COLOR)
+        self.col_key = LineEdit()
+        self.col_key.setText(DEFAULT_COLOR)
         self.col_key.setPlaceholderText(t("key_color"))
         for lab, edit in ((t("key_capture"), self.cap_key), (t("key_color"), self.col_key)):
             col = QVBoxLayout()
-            m = QLabel(lab)
-            m.setObjectName("Muted")
+            m = app_label(lab, "muted")
             col.addWidget(m)
             col.addWidget(edit)
             row.addLayout(col)
             edit.textChanged.connect(self._refresh_snippet)
         lay2.addLayout(row)
-        self.key_note = QLabel()
-        self.key_note.setObjectName("Muted")
+        self.key_note = app_label("", "muted")
         self.key_note.setTextFormat(Qt.TextFormat.RichText)
         self.key_note.setWordWrap(True)
         lay2.addWidget(self.key_note)
         layout.addWidget(card2)
 
         card3, lay3 = self._make_card()
-        t3 = QLabel(t("card_snippet"))
-        t3.setObjectName("CardTitle")
+        t3 = app_label(t("card_snippet"), "card_title")
         lay3.addWidget(t3)
-        self.snippet_view = QPlainTextEdit()
+        self.snippet_view = PlainTextEdit()
         self.snippet_view.setReadOnly(True)
         self.snippet_view.setMinimumHeight(140)
         lay3.addWidget(self.snippet_view)
         btns = QHBoxLayout()
-        self.copy_snip_btn = QPushButton(" " + t("copy"))
-        self.copy_snip_btn.setObjectName("Secondary")
+        self.copy_snip_btn = PushButton(" " + t("copy"))
         self._set_icon(self.copy_snip_btn, "copy", "#e4e4e7", 13)
         self.copy_snip_btn.clicked.connect(self._copy_snippet)
         btns.addWidget(self.copy_snip_btn)
-        self.apply_keys_btn = QPushButton(" " + t("keys_apply"))
+        self.apply_keys_btn = PrimaryPushButton(" " + t("keys_apply"))
         self._set_icon(self.apply_keys_btn, "check", "#09090b", 13)
         self.apply_keys_btn.clicked.connect(self._apply_keys)
         btns.addWidget(self.apply_keys_btn)
-        self.remove_keys_btn = QPushButton(" " + t("keys_remove"))
-        self.remove_keys_btn.setObjectName("Secondary")
+        self.remove_keys_btn = PushButton(" " + t("keys_remove"))
         self.remove_keys_btn.clicked.connect(self._remove_keys)
         btns.addWidget(self.remove_keys_btn)
         lay3.addLayout(btns)
-        self.keys_status = QLabel()
-        self.keys_status.setObjectName("Muted")
+        self.keys_status = app_label("", "muted")
         self.keys_status.setWordWrap(True)
         lay3.addWidget(self.keys_status)
         layout.addWidget(card3)
@@ -1017,7 +823,7 @@ class SetupWindow(QWidget):
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle(t("uninstall_title"))
         box.setText(t("uninstall_confirm"))
-        purge = QCheckBox(t("uninstall_purge"))
+        purge = CheckBox(t("uninstall_purge"))
         box.setCheckBox(purge)
         box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(QMessageBox.StandardButton.Cancel)
@@ -1051,10 +857,20 @@ class SetupWindow(QWidget):
         self.config.setup_completed = True
         self._save_config_data()
         self.apply_btn.setText(t("btn_applied"))
+        if InfoBar is not None:
+            InfoBar.success(
+                t("set_title"), t("btn_applied"), duration=1500,
+                position=InfoBarPosition.TOP_RIGHT, parent=self,
+            )
         QTimer.singleShot(1500, lambda: self.apply_btn.setText(t("btn_apply")))
 
     def _save_and_close(self):
         self.config.setup_completed = True
         self._save_config_data()
+        if InfoBar is not None:
+            InfoBar.success(
+                t("set_title"), t("btn_applied"), duration=1500,
+                position=InfoBarPosition.TOP_RIGHT, parent=self,
+            )
         if not self.embedded:
             self.close()

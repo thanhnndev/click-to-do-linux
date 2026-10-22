@@ -1,22 +1,24 @@
 """Clean, minimal AI Streaming Panel without emojis."""
 
 from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QRectF
+from PyQt6.QtGui import QPainter, QPainterPath
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QTextBrowser,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
+from qfluentwidgets import TransparentPushButton, TransparentToolButton
 from ..utils.clipboard import ClipboardManager
 from ..i18n import t
 from .icons import get_icon
 from ..config import load_config
+from qfluentwidgets.components.material.acrylic_widget import AcrylicWidget
 from .palette import theme_color
-from .theme import overlay_style
+from .theme import AI_DIALOG_STYLE, overlay_style
 
 
 class StreamWorker(QThread):
@@ -37,13 +39,16 @@ class StreamWorker(QThread):
             self.error_occurred.emit(str(e))
 
 
-class AIDialog(QFrame):
+class AIDialog(QFrame, AcrylicWidget):
     def __init__(self, title: str, generator_func, parent: QWidget = None):
         super().__init__(parent)
         self.theme = load_config().ui_theme
         self.setObjectName("AiDialog")
+        self.acrylicBrush.blurRadius = 20
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(500, 320)
         self.setWindowFlags(Qt.WindowType.SubWindow | Qt.WindowType.FramelessWindowHint)
+        self.setStyleSheet(overlay_style(self.theme, AI_DIALOG_STYLE))
 
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(14, 12, 14, 12)
@@ -59,7 +64,7 @@ class AIDialog(QFrame):
         self.status_label.setStyleSheet(overlay_style(self.theme, "color: #a1a1aa; font-size: 12px;"))
         header.addWidget(self.status_label)
 
-        self.close_btn = QToolButton()
+        self.close_btn = TransparentToolButton()
         self.close_btn.setIcon(get_icon("close", theme_color("#a1a1aa", self.theme), 14))
         self.close_btn.setIconSize(QSize(14, 14))
         self.close_btn.clicked.connect(self.hide)
@@ -71,20 +76,8 @@ class AIDialog(QFrame):
         self.layout.addWidget(self.text_browser)
 
         footer = QHBoxLayout()
-        self.copy_btn = QPushButton(" " + t("copy"))
+        self.copy_btn = TransparentPushButton(" " + t("copy"))
         self.copy_btn.setIcon(get_icon("copy", theme_color("#ffffff", self.theme), 13))
-        self.copy_btn.setStyleSheet(overlay_style(self.theme, """
-            QPushButton {
-                background-color: rgba(255, 255, 255, 0.12);
-                color: #ffffff;
-                border: none;
-                border-radius: 6px;
-                padding: 5px 12px;
-                font-size: 12px;
-                font-weight: 500;
-            }
-            QPushButton:hover { background-color: rgba(255, 255, 255, 0.20); }
-        """))
         self.copy_btn.clicked.connect(self._copy_result)
         footer.addWidget(self.copy_btn)
         footer.addStretch()
@@ -95,6 +88,17 @@ class AIDialog(QFrame):
         self.worker.finished.connect(self._on_finished)
         self.worker.error_occurred.connect(self._on_error)
         self.worker.start()
+
+    def acrylicClipPath(self):
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 12, 12)
+        return path
+
+    def paintEvent(self, e):
+        painter = QPainter(self)
+        painter.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform)
+        self._drawAcrylic(painter)
+        super().paintEvent(e)
 
     def _on_chunk(self, chunk: str):
         self.text_browser.moveCursor(self.text_browser.textCursor().MoveOperation.End)

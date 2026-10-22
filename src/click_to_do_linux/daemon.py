@@ -21,6 +21,7 @@ from .capture.screen import ScreenCapture
 from .productivity import ProductivityService
 from .ui.icons import get_icon
 from .config import load_config
+from .ui.fluent_theme import apply_app_font, sync_fluent_theme
 from .ui.palette import theme_color, theme_stylesheet
 from .ui.overlay import OverlayWindow
 from .ui.workspace import OfficeWindow
@@ -36,6 +37,9 @@ class ClickToDoDaemon:
         QGuiApplication.setDesktopFileName(APP_ID)
         self.app = QApplication.instance() or QApplication(sys.argv)
         self.app.setQuitOnLastWindowClosed(False)
+        # Fluent controls must follow the saved palette before any window shows.
+        apply_app_font(self.app)
+        sync_fluent_theme(load_config().ui_theme)
 
         self.active_overlay: OverlayWindow | None = None
         self.office_win: OfficeWindow | None = None

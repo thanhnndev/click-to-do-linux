@@ -4,33 +4,50 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PyQt6.QtCore import QSignalBlocker, QTimer, Qt, pyqtSignal
+from PyQt6.QtCore import QSignalBlocker, QSize, QTimer, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
-    QCheckBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
-    QPlainTextEdit,
-    QProgressBar,
-    QPushButton,
-    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
+from qfluentwidgets import (
+    CheckBox,
+    LineEdit,
+    PlainTextEdit,
+    PrimaryPushButton,
+    ProgressBar,
+    PushButton,
+    ScrollArea,
+    TogglePushButton,
+    TransparentPushButton,
+    TransparentToolButton,
+)
 
 from ..config import load_config, save_config
 from ..i18n import current_lang, t
 from ..productivity import ProductivityService
+from .fluent_theme import sync_fluent_theme
+from .typography import PixmapLabel, label as app_label
 from .icons import get_icon
 from .palette import apply_input_palette, accent, primary_ink, theme_stylesheet
+from PyQt6.QtGui import QIcon
+from qfluentwidgets import (
+    FluentIcon,
+    FluentWindow,
+    InfoBar,
+    InfoBarPosition,
+    NavigationItemPosition,
+)
+from PyQt6.QtGui import QColor
 
 
-class OfficeWindow(QWidget):
+class OfficeWindow(FluentWindow):
     """One resident app shell for Workbench and Settings."""
 
     theme_changed = pyqtSignal(str)
@@ -68,23 +85,17 @@ class OfficeWindow(QWidget):
 
     @staticmethod
     def _style() -> str:
+        # Only layout, card and typography live here. Every interactive control
+        # is a Fluent widget and keeps its own stylesheet.
         return """
-        QFrame#Sidebar { background: #0c0c0f; border-right: 1px solid #27272a; }
         QFrame#Topbar { border-bottom: 1px solid #27272a; }
         QLabel#Brand { font-size: 16px; font-weight: 650; }
-        QLabel#NavSection { color: #a1a1aa; font-size: 11px; font-weight: 600; }
-        QLabel#BackgroundStatus { color: #4ade80; font-size: 12px; }
-        QPushButton#Nav { background: transparent; border: 1px solid transparent; text-align: left; padding: 10px; }
-        QPushButton#Nav:hover { background: #27272a; }
-        QPushButton#Nav:checked { background: #123044; color: #7dd3fc; border-color: #155e75; }
-        QPushButton#ThemeToggle { text-align: left; }
         QWidget {
-            background-color: #09090b;
             color: #f4f4f5;
-            font-family: "Inter", "Noto Sans", system-ui, sans-serif;
-            font-size: 13px;
         }
+        QWidget#WorkbenchPage { background-color: #09090b; }
         QLabel { background: transparent; }
+        ScrollArea > QWidget > QWidget { background: transparent; }
         QFrame#Card {
             background-color: #121215;
             border: 1px solid #27272a;
@@ -95,164 +106,71 @@ class OfficeWindow(QWidget):
             border: 1px solid #27272a;
             border-radius: 9px;
         }
-        QLabel#MainTitle { font-size: 23px; font-weight: 650; color: #fafafa; }
-        QLabel#MainSub { color: #a1a1aa; font-size: 12px; }
-        QLabel#CardTitle { color: #f4f4f5; font-size: 14px; font-weight: 650; }
-        QLabel#CardHint { color: #a1a1aa; font-size: 12px; }
-        QLabel#Eyebrow { color: #38bdf8; font-size: 12px; font-weight: 700; letter-spacing: 1.1px; }
+        QLabel#MainTitle { font-size: 23px; font-weight: 650; }
+        QLabel#MainSub { font-size: 12px; }
+        QLabel#CardTitle { font-size: 14px; font-weight: 650; }
+        QLabel#CardHint { font-size: 12px; }
+        QLabel#Eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 1.1px; }
         QLabel#TimerText {
-            color: #fafafa;
             font-family: "Noto Sans Mono", "DejaVu Sans Mono", monospace;
             font-size: 60px;
             font-weight: 600;
         }
-        QLabel#TimerStatus { color: #a1a1aa; font-size: 12px; }
-        QLabel#ReminderStatus { color: #a1a1aa; font-size: 12px; }
-        QLabel#TaskText { color: #e4e4e7; font-size: 12px; }
-        QLabel#TaskText[done="true"] { color: #a1a1aa; }
-        QLabel#EmptyState { color: #a1a1aa; font-size: 12px; padding: 16px 8px; }
-        QPushButton {
-            background-color: #18181b;
-            color: #e4e4e7;
-            border: 1px solid #3f3f46;
-            border-radius: 7px;
-            padding: 8px 12px;
-            font-size: 12px;
-            font-weight: 550;
-            min-height: 18px;
-        }
-        QPushButton:hover { background-color: #27272a; border-color: #52525b; color: #fafafa; }
-        QPushButton:pressed { background-color: #303037; }
-        QPushButton:focus { border: 1px solid #38bdf8; }
-        QPushButton:disabled { color: #a1a1aa; border-color: #27272a; }
-        QPushButton#Primary {
-            background-color: #38bdf8;
-            color: #082f49;
-            border: 1px solid #38bdf8;
-            font-weight: 700;
-        }
-        QPushButton#Primary:hover { background-color: #7dd3fc; border-color: #7dd3fc; }
-        QPushButton#Primary:pressed { background-color: #0ea5e9; }
-        QPushButton#Quiet { background: transparent; border-color: transparent; color: #a1a1aa; }
-        QPushButton#Quiet:hover { background-color: #27272a; color: #f4f4f5; }
-        QPushButton#Mode { background: #18181b; border-color: #27272a; color: #a1a1aa; }
-        QPushButton#Mode:checked { background: #123044; border-color: #155e75; color: #7dd3fc; }
-        QPushButton#Mode:hover { border-color: #3f3f46; color: #f4f4f5; }
-        QLineEdit, QPlainTextEdit, QSpinBox, QTimeEdit {
-            background-color: #0c0c0f;
-            border: 1px solid #62626b;
-            border-radius: 7px;
-            padding: 7px 9px;
-            color: #e4e4e7;
-            selection-background-color: #075985;
-        }
-        QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QTimeEdit:focus { border-color: #38bdf8; }
-        QLineEdit::placeholder, QPlainTextEdit::placeholder { color: #a1a1aa; }
-        QSpinBox { min-width: 66px; padding-right: 5px; }
-        QSpinBox::up-button, QSpinBox::down-button { width: 16px; border: none; background: transparent; }
-        QCheckBox { spacing: 7px; color: #a1a1aa; font-size: 12px; }
-        QCheckBox::indicator {
-            width: 20px; height: 20px; border-radius: 4px;
-            border: 1px solid #a1a1aa; background: #0c0c0f;
-        }
-        QCheckBox::indicator:hover { border-color: #38bdf8; }
-        QCheckBox::indicator:checked { background: #38bdf8; border-color: #38bdf8; }
-        QProgressBar {
-            border: none; border-radius: 3px; background-color: #27272a; max-height: 6px;
-        }
-        QProgressBar::chunk { border-radius: 3px; background-color: #38bdf8; }
-        QScrollArea { border: none; background: transparent; }
-        QScrollArea > QWidget > QWidget { background: transparent; }
-        QScrollBar:vertical { width: 8px; background: transparent; margin: 2px; }
-        QScrollBar::handle:vertical { background: #3f3f46; border-radius: 4px; min-height: 28px; }
-        QScrollBar::handle:vertical:hover { background: #52525b; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        QLabel#TimerStatus { font-size: 12px; }
+        QLabel#ReminderStatus { font-size: 12px; }
+        QLabel#TaskText { font-size: 12px; }
+        QLabel#EmptyState { font-size: 12px; padding: 16px 8px; }
         """
 
     def _build_ui(self) -> None:
-        root = QHBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-        self.sidebar = QFrame()
-        self.sidebar.setObjectName("Sidebar")
-        self.sidebar.setFixedWidth(210)
-        side = QVBoxLayout(self.sidebar)
-        side.setContentsMargins(14, 22, 14, 16)
-        side.setSpacing(8)
-        brand_row = QHBoxLayout()
-        self.brand_icon = QLabel()
-        brand_row.addWidget(self.brand_icon)
-        self.brand_label = QLabel("Click to Do")
-        self.brand_label.setObjectName("Brand")
-        brand_row.addWidget(self.brand_label, 1)
-        side.addLayout(brand_row)
-        side.addSpacing(24)
-        self.nav_section = QLabel(t("shell_workspace"))
-        self.nav_section.setObjectName("NavSection")
-        side.addWidget(self.nav_section)
-        self.nav_buttons = {}
-        for page, text, icon in (("workbench", "office_heading", "briefcase"), ("settings", "office_settings", "settings")):
-            button = QPushButton(t(text))
-            button.setObjectName("Nav")
-            button.setCheckable(True)
-            button.setToolTip(t(text))
-            button.setAccessibleName(t(text))
-            button.clicked.connect(lambda checked=False, current=page: self.show_page(current))
-            side.addWidget(button)
-            self.nav_buttons[page] = (button, text, icon)
-        side.addStretch(1)
-        self.theme_toggle = QPushButton()
-        self.theme_toggle.setObjectName("ThemeToggle")
-        self.theme_toggle.clicked.connect(lambda: self.set_theme("light" if self.theme == "dark" else "dark"))
-        side.addWidget(self.theme_toggle)
-        self.background_label = QLabel(t("shell_background"))
-        self.background_label.setObjectName("BackgroundStatus")
-        self.background_label.setWordWrap(True)
-        side.addWidget(self.background_label)
-        self.quit_button = QPushButton(t("shell_quit"))
-        self.quit_button.setObjectName("Quiet")
-        self.quit_button.clicked.connect(self.on_quit)
-        side.addWidget(self.quit_button)
-        root.addWidget(self.sidebar)
+        # Workbench page hosted in FluentWindow's stacked widget.
+        self.workbench_page = QWidget()
+        self.workbench_page.setObjectName("WorkbenchPage")
 
-        main = QWidget()
-        body = QVBoxLayout(main)
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(0)
+        page_layout = QVBoxLayout(self.workbench_page)
+        page_layout.setContentsMargins(24, 18, 24, 24)
+        page_layout.setSpacing(14)
+
         topbar = QFrame()
         topbar.setObjectName("Topbar")
         header = QHBoxLayout(topbar)
-        header.setContentsMargins(24, 18, 24, 18)
+        header.setContentsMargins(0, 0, 0, 0)
         titles = QVBoxLayout()
         titles.setSpacing(4)
-        self.page_title = QLabel(t("office_heading"))
+        brand_row = QHBoxLayout()
+        self.brand_icon = PixmapLabel()
+        brand_row.addWidget(self.brand_icon)
+        self.brand_label = app_label("Click to Do", "brand")
+        self.brand_label.setObjectName("Brand")
+        brand_row.addWidget(self.brand_label)
+        titles.addLayout(brand_row)
+        self.page_title = app_label(t("office_heading"), "subtitle")
         self.page_title.setObjectName("MainTitle")
-        self.page_subtitle = QLabel(t("office_subtitle"))
+        self.page_subtitle = app_label(t("office_subtitle"), "caption")
         self.page_subtitle.setObjectName("MainSub")
         self.page_subtitle.setWordWrap(True)
         titles.addWidget(self.page_title)
         titles.addWidget(self.page_subtitle)
         header.addLayout(titles, 1)
-        self.capture_button = QPushButton(t("office_capture"))
+        self.capture_button = PrimaryPushButton(t("office_capture"))
         self.capture_button.setToolTip(t("office_capture"))
         self.capture_button.clicked.connect(lambda: self.on_capture(False))
-        self.color_button = QPushButton(t("office_color"))
+        self.color_button = PushButton(t("office_color"))
         self.color_button.setToolTip(t("office_color"))
         self.color_button.clicked.connect(lambda: self.on_capture(True))
         header.addWidget(self.capture_button)
         header.addWidget(self.color_button)
-        body.addWidget(topbar)
-        self.pages = QStackedWidget()
-        dashboard = QWidget()
-        dashboard_layout = QVBoxLayout(dashboard)
-        dashboard_layout.setContentsMargins(24, 18, 24, 24)
-        dashboard_layout.setSpacing(14)
-        self.date_label = QLabel()
+        page_layout.addWidget(topbar)
+
+        self.date_label = app_label("", "caption")
         self.date_label.setObjectName("MainSub")
-        dashboard_layout.addWidget(self.date_label)
-        scroll = QScrollArea()
+        page_layout.addWidget(self.date_label)
+
+        scroll = ScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        # The viewport fills with the palette colour unless it is turned off.
+        scroll.viewport().setAutoFillBackground(False)
         content = QWidget()
         self.dashboard_grid = QGridLayout(content)
         self.dashboard_grid.setContentsMargins(0, 0, 6, 0)
@@ -268,7 +186,7 @@ class OfficeWindow(QWidget):
         self._build_tasks(layout)
         self.cards["tasks"] = card
         card, layout = self._make_card(t("office_notes_section"), t("office_notes_hint"))
-        self.notes_edit = QPlainTextEdit()
+        self.notes_edit = PlainTextEdit()
         self.notes_edit.setPlaceholderText(t("office_notes_placeholder"))
         self.notes_edit.setMinimumHeight(120)
         self.notes_edit.textChanged.connect(self._note_timer.start)
@@ -284,10 +202,37 @@ class OfficeWindow(QWidget):
                 column_layout.addWidget(self.cards[key])
             column_layout.addStretch(1)
         scroll.setWidget(content)
-        dashboard_layout.addWidget(scroll, 1)
-        self.pages.addWidget(dashboard)
-        body.addWidget(self.pages, 1)
-        root.addWidget(main, 1)
+        page_layout.addWidget(scroll, 1)
+
+        self.addSubInterface(self.workbench_page, FluentIcon.HOME, t("office_heading"))
+
+        # Settings page created upfront so its nav entry is visible.
+        from .setup_window import SetupWindow
+        self.settings_page = SetupWindow(embedded=True, productivity_service=self.service)
+        self.settings_page.setObjectName("SettingsPage")
+        self.settings_page.theme_changed.connect(self.set_theme)
+        self.settings_page.set_theme(self.theme)
+        self.addSubInterface(self.settings_page, FluentIcon.SETTING, t("office_settings"))
+
+        # Footer navigation items (bottom).
+        color = accent(self.theme)
+        self.theme_nav_item = self.navigationInterface.addItem(
+            routeKey="theme_toggle",
+            icon=get_icon("sun" if self.theme == "dark" else "moon", color, 17),
+            text=t("theme_to_light" if self.theme == "dark" else "theme_to_dark"),
+            onClick=lambda: self.set_theme("light" if self.theme == "dark" else "dark"),
+            selectable=False,
+            position=NavigationItemPosition.BOTTOM,
+        )
+        self.quit_nav_item = self.navigationInterface.addItem(
+            routeKey="quit",
+            icon=get_icon("power", color, 17),
+            text=t("shell_quit"),
+            onClick=self.on_quit,
+            selectable=False,
+            position=NavigationItemPosition.BOTTOM,
+        )
+
         self.show_page("workbench")
         self._layout_dashboard()
 
@@ -295,22 +240,25 @@ class OfficeWindow(QWidget):
         if page == "settings" and self.settings_page is None:
             from .setup_window import SetupWindow
             self.settings_page = SetupWindow(embedded=True, productivity_service=self.service)
+            self.settings_page.setObjectName("SettingsPage")
             self.settings_page.theme_changed.connect(self.set_theme)
             self.settings_page.set_theme(self.theme)
-            self.pages.addWidget(self.settings_page)
+            self.addSubInterface(self.settings_page, FluentIcon.SETTING, t("office_settings"))
         self._page = page
-        self.pages.setCurrentIndex(1 if page == "settings" else 0)
-        self.page_title.setText(t("office_settings" if page == "settings" else "office_heading"))
-        self.page_subtitle.setText(t("shell_settings_sub" if page == "settings" else "office_subtitle"))
-        for name, (button, _, _) in self.nav_buttons.items():
-            button.setChecked(name == page)
+        target = self.settings_page if page == "settings" else self.workbench_page
+        self.switchTo(target)
+        if page == "workbench":
+            self.page_title.setText(t("office_heading"))
+            self.page_subtitle.setText(t("office_subtitle"))
 
     def show_settings(self) -> None:
         self.show_page("settings")
 
     def set_theme(self, theme: str, persist: bool = True) -> None:
         self.theme = "light" if theme == "light" else "dark"
-        self.setStyleSheet(theme_stylesheet(self._style(), self.theme))
+        sync_fluent_theme(self.theme)
+        if hasattr(self, "workbench_page"):
+            self.workbench_page.setStyleSheet(theme_stylesheet(self._style(), self.theme))
         apply_input_palette(self, self.theme)
         if persist:
             config = load_config()
@@ -320,38 +268,37 @@ class OfficeWindow(QWidget):
             self.settings_page.set_theme(self.theme)
         color = accent(self.theme)
         self.brand_icon.setPixmap(get_icon("app_logo", color, 28).pixmap(28, 28))
-        for _, (button, _, icon) in self.nav_buttons.items():
-            button.setIcon(get_icon(icon, color, 17))
-        self.theme_toggle.setText(t("theme_to_light" if self.theme == "dark" else "theme_to_dark"))
-        self.theme_toggle.setIcon(get_icon("sun" if self.theme == "dark" else "moon", color, 17))
-        self.theme_toggle.setToolTip(self.theme_toggle.text())
         self.capture_button.setIcon(get_icon("app_logo", color, 16))
         self.color_button.setIcon(get_icon("pipette", color, 16))
         self.reset_button.setIcon(get_icon("refresh", color, 15))
         for widgets in self.reminder_widgets.values():
             widgets["done"].setIcon(get_icon("check", color, 16))
             widgets["snooze"].setIcon(get_icon("clock", color, 15))
-        self.quit_button.setIcon(get_icon("power", color, 15))
+        # Update footer nav items.
+        if hasattr(self, "theme_nav_item"):
+            self.theme_nav_item.setText(t("theme_to_light" if self.theme == "dark" else "theme_to_dark"))
+            self.theme_nav_item.setIcon(get_icon("sun" if self.theme == "dark" else "moon", color, 17))
+        if hasattr(self, "quit_nav_item"):
+            self.quit_nav_item.setIcon(get_icon("power", color, 17))
         self._shown_running = None
         self._rendered_tasks = None
         self.refresh()
         self._layout_dashboard()
+        if persist:
+            InfoBar.success(
+                t("office_title"),
+                t("theme_to_light" if self.theme == "dark" else "theme_to_dark"),
+                duration=1500,
+                position=InfoBarPosition.TOP_RIGHT,
+                parent=self,
+            )
         self.theme_changed.emit(self.theme)
 
     def _layout_dashboard(self) -> None:
         if not hasattr(self, "dashboard_grid"):
             return
-        compact = self.width() < 1040
-        self.sidebar.setFixedWidth(66 if compact else 210)
-        for widget in (self.brand_label, self.nav_section, self.background_label):
-            widget.setVisible(not compact)
-        for _, (button, key, _) in self.nav_buttons.items():
-            button.setText("" if compact else t(key))
-        self.theme_toggle.setText("" if compact else t("theme_to_light" if self.theme == "dark" else "theme_to_dark"))
-        self.quit_button.setText("" if compact else t("shell_quit"))
-        self.quit_button.setToolTip(t("shell_quit"))
-        self.capture_button.setText("" if compact else t("office_capture"))
-        self.color_button.setText("" if compact else t("office_color"))
+        self.capture_button.setText(t("office_capture"))
+        self.color_button.setText(t("office_color"))
         grid = self.dashboard_grid
         if not hasattr(self, "left_column"):
             return
@@ -383,18 +330,17 @@ class OfficeWindow(QWidget):
         header.setSpacing(10)
         title_stack = QVBoxLayout()
         title_stack.setSpacing(3)
-        label = QLabel(eyebrow)
+        label = app_label(eyebrow, "eyebrow")
         label.setObjectName("CardTitle")
         title_stack.addWidget(label)
         if hint:
-            subtitle = QLabel(hint)
+            subtitle = app_label(hint, "caption")
             subtitle.setObjectName("CardHint")
             subtitle.setWordWrap(True)
             title_stack.addWidget(subtitle)
         header.addLayout(title_stack, stretch=1)
         if configurable:
-            settings = QPushButton(t("office_settings"))
-            settings.setObjectName("Quiet")
+            settings = TransparentPushButton(t("office_settings"))
             settings.clicked.connect(self.show_settings)
             header.addWidget(settings)
         layout.addLayout(header)
@@ -407,9 +353,7 @@ class OfficeWindow(QWidget):
         mode_row.setSpacing(6)
         self.mode_buttons = {}
         for mode, key in (("focus", "office_mode_focus"), ("short_break", "office_mode_short"), ("long_break", "office_mode_long")):
-            button = QPushButton(t(key))
-            button.setObjectName("Mode")
-            button.setCheckable(True)
+            button = TogglePushButton(t(key))
             button.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
             button.clicked.connect(lambda checked=False, current=mode: self.service.select_timer_mode(current))
             self.mode_group.addButton(button)
@@ -419,15 +363,13 @@ class OfficeWindow(QWidget):
         layout.addLayout(mode_row)
         clock_row = QHBoxLayout()
         clock_row.setSpacing(12)
-        self.clock = QLabel("25:00")
+        self.clock = app_label("25:00", "title")
         self.clock.setObjectName("TimerText")
         clock_row.addWidget(self.clock, 1)
-        self.timer_toggle = QPushButton(t("office_start"))
-        self.timer_toggle.setObjectName("Primary")
+        self.timer_toggle = PrimaryPushButton(t("office_start"))
         self.timer_toggle.clicked.connect(self.service.start_or_pause_timer)
-        reset = QPushButton()
-        reset.setObjectName("ResetTimer")
-        reset.setFixedWidth(40)
+        reset = TransparentToolButton()
+        reset.setFixedSize(34, 34)
         reset.setToolTip(t("office_reset"))
         reset.setAccessibleName(t("office_reset"))
         reset.clicked.connect(self.service.reset_timer)
@@ -435,14 +377,14 @@ class OfficeWindow(QWidget):
         clock_row.addWidget(self.timer_toggle)
         clock_row.addWidget(reset)
         layout.addLayout(clock_row)
-        self.cycle_label = QLabel()
+        self.cycle_label = app_label("", "caption")
         self.cycle_label.setObjectName("ReminderStatus")
         layout.addWidget(self.cycle_label)
-        self.timer_status = QLabel()
+        self.timer_status = app_label("", "caption")
         self.timer_status.setObjectName("TimerStatus")
         self.timer_status.setWordWrap(True)
         layout.addWidget(self.timer_status)
-        self.timer_progress = QProgressBar()
+        self.timer_progress = ProgressBar()
         self.timer_progress.setRange(0, 1000)
         self.timer_progress.setTextVisible(False)
         self.timer_progress.setFixedHeight(4)
@@ -458,24 +400,22 @@ class OfficeWindow(QWidget):
             item.setSpacing(7)
             text = QVBoxLayout()
             text.setSpacing(5)
-            name = QLabel(t(title))
+            name = app_label(t(title), "heading")
             name.setObjectName("CardTitle")
             name.setWordWrap(True)
             name.setToolTip(t(hint))
             text.addWidget(name)
-            status = QLabel()
+            status = app_label("", "caption")
             status.setObjectName("ReminderStatus")
             status.setWordWrap(True)
             text.addWidget(status)
             item.addLayout(text, 1)
-            done = QPushButton()
-            done.setObjectName("Quiet")
+            done = TransparentToolButton()
             done.setFixedSize(34, 34)
             done.setToolTip(t("office_mark_done"))
             done.setAccessibleName(t("office_mark_done") + ": " + t(title))
             done.clicked.connect(lambda checked=False, current=key: self.service.mark_reminder_done(current))
-            snooze = QPushButton()
-            snooze.setObjectName("Quiet")
+            snooze = TransparentToolButton()
             snooze.setFixedSize(34, 34)
             snooze.setToolTip(t("office_snooze"))
             snooze.setAccessibleName(t("office_snooze") + ": " + t(title))
@@ -484,32 +424,30 @@ class OfficeWindow(QWidget):
             item.addWidget(snooze)
             layout.addWidget(frame)
             self.reminder_widgets[key] = {"status": status, "done": done, "snooze": snooze}
-        self.schedule_summary = QLabel()
+        self.schedule_summary = app_label("", "caption")
         self.schedule_summary.setObjectName("CardHint")
         self.schedule_summary.setWordWrap(True)
         layout.addWidget(self.schedule_summary)
-        self.reminders_pause_btn = QPushButton(t("office_pause_reminders"))
-        self.reminders_pause_btn.setObjectName("Quiet")
+        self.reminders_pause_btn = TransparentPushButton(t("office_pause_reminders"))
         self.reminders_pause_btn.clicked.connect(self._toggle_reminder_pause)
         layout.addWidget(self.reminders_pause_btn)
-        self.reminders_pause_status = QLabel()
+        self.reminders_pause_status = app_label("", "caption")
         self.reminders_pause_status.setObjectName("CardHint")
         layout.addWidget(self.reminders_pause_status)
 
     def _build_tasks(self, layout: QVBoxLayout) -> None:
         top_row = QHBoxLayout()
-        self.task_count = QLabel()
+        self.task_count = app_label("", "caption")
         self.task_count.setObjectName("CardHint")
         top_row.addStretch(1)
         top_row.addWidget(self.task_count)
         layout.insertLayout(1, top_row)
 
         input_row = QHBoxLayout()
-        self.task_input = QLineEdit()
+        self.task_input = LineEdit()
         self.task_input.setPlaceholderText(t("office_task_placeholder"))
         self.task_input.returnPressed.connect(self._add_task)
-        add_btn = QPushButton(t("office_add_task"))
-        add_btn.setObjectName("Primary")
+        add_btn = PrimaryPushButton(t("office_add_task"))
         add_btn.clicked.connect(self._add_task)
         input_row.addWidget(self.task_input, stretch=1)
         input_row.addWidget(add_btn)
@@ -616,7 +554,7 @@ class OfficeWindow(QWidget):
         if task_signature != self._rendered_tasks:
             self._clear_layout(self.task_list)
             if not self.service.tasks:
-                empty = QLabel(t("office_no_tasks"))
+                empty = app_label(t("office_no_tasks"), "muted")
                 empty.setObjectName("EmptyState")
                 empty.setWordWrap(True)
                 self.task_list.addWidget(empty)
@@ -624,12 +562,11 @@ class OfficeWindow(QWidget):
                 for task in self.service.tasks:
                     row = QHBoxLayout()
                     row.setSpacing(8)
-                    check = QCheckBox()
+                    check = CheckBox()
                     check.setChecked(bool(task.get("done")))
                     check.toggled.connect(lambda _checked, task_id=task["id"]: self.service.toggle_task(task_id))
-                    label = QLabel(str(task.get("text", "")))
+                    label = app_label(str(task.get("text", "")), "muted" if task.get("done") else "body")
                     label.setObjectName("TaskText")
-                    label.setProperty("done", bool(task.get("done")))
                     task_font = label.font()
                     task_font.setStrikeOut(bool(task.get("done")))
                     label.setFont(task_font)
@@ -637,8 +574,7 @@ class OfficeWindow(QWidget):
                     label.style().polish(label)
                     label.setWordWrap(True)
                     label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-                    delete = QPushButton()
-                    delete.setObjectName("Quiet")
+                    delete = TransparentToolButton()
                     delete.setIcon(get_icon("close", "#475569" if self.theme == "light" else "#a1a1aa", 13))
                     delete.setFixedSize(34, 34)
                     delete.setToolTip(t("office_delete_task"))
