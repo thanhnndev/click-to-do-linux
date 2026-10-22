@@ -250,40 +250,36 @@ class OverlayWindow(QWidget):
         # 2.5 Signature Windows 11 / Copilot glowing border aura
         self._draw_windows11_glowing_border(painter)
 
-        # 2.6 Image processing: keep the frame open. While busy, show a
-        #     loading overlay across the whole image + an animated wave border
-        #     (same aurora wave as the screen border) around the selection.
-        #     When done, composite the processed result onto the background.
+        # 2.6 Image processing: keep the frame open. While busy, draw the same
+        #     animated aurora wave border around the selected region (no full-screen
+        #     overlay, no loading text). When done, composite the processed result
+        #     onto the background in place of the original crop.
         if self.processed_rect is not None:
             r = self.processed_rect
             if self.processed_pixmap is not None and not self.processed_pixmap.isNull():
                 painter.drawPixmap(r, self.processed_pixmap)
             if self.processing_image:
-                # Wave border around the selection (reuse aurora, scoped to rect).
+                # Aurora overlay covering the entire selected region with opacity,
+                # animated like a scanning sweep (wave travels across the region).
                 painter.save()
+                # Dim the region slightly so the aurora glow reads on top.
+                painter.fillRect(r, QColor(9, 9, 12, 110))
                 painter.translate(r.x(), r.y())
-                draw_aurora_border(painter, r.width(), r.height(), self.glow_phase, AURORA)
+                from .aurora import AuroraSpec
+                fill_spec = AuroraSpec(
+                    rim_width=0.0,
+                    glow_depth=max(r.width(), r.height()),
+                    wave_amplitude=max(6.0, min(r.width(), r.height()) * 0.08),
+                    wave_count=AURORA.wave_count,
+                    wave_period=AURORA.wave_period,
+                    glow_strength=AURORA.glow_strength,
+                    second_wave_count=AURORA.second_wave_count,
+                    second_wave_amplitude=AURORA.second_wave_amplitude * 0.6,
+                    second_wave_strength=AURORA.second_wave_strength,
+                    second_wave_phase=AURORA.second_wave_phase,
+                )
+                draw_aurora_border(painter, r.width(), r.height(), self.glow_phase, fill_spec)
                 painter.restore()
-        if self.processing_image:
-            # Full-screen loading overlay across the entire captured image.
-            painter.fillRect(self.rect(), QColor(9, 9, 12, 150))
-            import math
-            phase = self.glow_phase
-            cx = self.width() // 2
-            cy = self.height() // 2
-            # Animated spinner arc
-            pen = QPen(QColor(56, 189, 248, 230), 4)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            span = int(120 + 60 * (0.5 + 0.5 * math.sin(2 * math.pi * phase)))
-            start_angle = int(phase * 360 * 16)
-            painter.drawArc(cx - 28, cy - 28, 56, 56, start_angle, span * 16)
-            # Pulsing label
-            alpha = int(180 + 75 * (0.5 + 0.5 * math.sin(2 * math.pi * phase * 1.5)))
-            painter.setPen(QColor(244, 244, 245, alpha))
-            painter.setFont(QFont("sans-serif", 13, QFont.Weight.Bold))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "\n\n" + t("processing"))
 
         # 3. Draw OCR text highlights
         for box in self.ocr_boxes:
@@ -635,16 +631,21 @@ class OverlayWindow(QWidget):
                 save_dir.mkdir(parents=True, exist_ok=True)
                 fn = save_dir / f"cutout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
                 result_img.save(fn)
-            # Keep the capture frame open and show the processed result in
-            # place of the original crop so the user can review / copy again.
+            # Keep the capture frame open and composite the processed result
+            # onto the background in place of the original crop.
             self.processed_image = result_img
             try:
-                from PyQt6.QtGui import QPixmap as _QP
                 data = result_img.convert("RGBA").tobytes("raw", "RGBA")
                 qimg = QImage(data, result_img.width, result_img.height, result_img.width * 4, QImage.Format.Format_RGBA8888)
                 self.processed_pixmap = QPixmap.fromImage(qimg)
             except Exception:
                 self.processed_pixmap = None
+            # Re-show the action bar bound to the result so the user can copy/save.
+            if self.processed_rect is not None:
+                r = self.processed_rect
+                r_tuple = (r.x(), r.y(), r.width(), r.height())
+                self.action_bar.show_for_image(result_img)
+                self.action_bar.reposition(r_tuple, self.width(), self.height())
         self.update()
 
     def closeEvent(self, event):
