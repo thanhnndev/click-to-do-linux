@@ -117,55 +117,24 @@ Dáng thanh cuộn trong `tokens.css` (từ `* { --scrollbar-thumb` đến hết
 
 Overlay là công cụ trên ảnh chụp nên viền do **app** tự vẽ (`ui/aurora.py`), không dùng widget Fluent.
 
-**Hình dạng:** một *sóng ánh sáng* lăn quanh mép màn hình (như sóng biển), không phải các vòng đồng tâm. Crest sáng chạy vòng quanh chu vi, trough chìm xuống, màu chạy theo crest.
+**Hình dạng:** viền "sóng" — một **conic gradient quay** (bảng màu Copilot) chạy quanh mép màn hình, kèm quầng sáng mờ vào trong (4 strip theo 4 cạnh, màu chạy theo sweep) và một đường highlight trắng mờ bên trong. Đây chính là cảm giác "wave" của Windows 11 / Copilot Click to Do.
 
-Tham chiếu: moving border của CSS (conic gradient + `@property --angle`) và các hiệu ứng "liquid" (hai shape quay lệch tốc độ để không lặp).
+Tham chiếu: Windows 11 / Copilot "moving border" (conic gradient quay + inward glow).
 
 | Token | Giá trị | Ghi chú |
 | --- | --- | --- |
-| `--aurora-rim` | 8px, strength 1.0, profile plateau | Viền neon sát cạnh, sáng đều rồi tắt ở mép trong |
-| `--aurora-glow` | 82px, strength 0.6, `exp(-d/22)` | Quầng trong, mờ dần về phía nội dung |
-| `--aurora-wave` | 2.5 sóng, biên độ điều biến 0.18 | Sóng dài + sóng chậm chồng lên, không lặp |
-| `--aurora-period` | 9s / vòng | Tốc độ sóng, tính theo wall-clock |
-| `--aurora-hue` | 1 vòng bảng màu / vòng sóng | Màu chạy cùng crest |
+| `--aurora-rim` | 8px | Viền neon conic gradient quay |
+| `--aurora-glow` | 72px, alpha 0.55 × pulse | Quầng sáng mờ vào trong, 4 cạnh, màu chạy theo sweep |
+| `--aurora-highlight` | 1px trắng, alpha 42 × pulse | Đường highlight bên trong |
+| `--aurora-period` | 7s / vòng | Tốc độ quay của sweep |
+| `--aurora-pulse` | biên độ 0.18 | Nhịp thở của quầng sáng |
 
 **Quy tắc bắt buộc:**
 
-1. **Sóng chạy theo cung vòng chu vi (arc length), không theo góc.** Gradient nón là hàm theo góc → sóng sẽ trườn chậm ở cạnh dài và chạy nhanh ở cạnh ngắn. Mỗi cột texture phải mang giá trị sóng tại vị trí cung vòng của nó.
-2. **Sóng = texture, không phải gradient nón.** Texture chứa cả hai: gradient ngang theo cung vòng (màu + alpha của sóng) × `CompositionMode_DestinationIn` với gradient suy giảm theo độ sâu. Conic gradient đắt (~23ns/px) và phải chồng nhiều lớp để có fade → **44ms/khung ở 1080p**; texture là **1.8ms/khung**.
-3. **Góc là patch riêng.** Hai band cạnh chồng lên ở góc sẽ cộng dồn thành khối vuông sáng. Band dừng trước góc, góc dùng mask khoảng cách tới mép gần nhất (`min` của hai hướng, smooth-max để khỏi nếp 45°), mask build 1 lần rồi cache.
-4. **Chỉ 2 dải: rim + glow.** Cả hai đều theo sóng → viền không bao giờ đọc ra như các vòng đồng tâm.
-5. Mọi thao tác phải khôi phục `painter.setOpacity(1.0)` trước khi trả về, nếu không phần vẽ sau trong `paintEvent` sẽ bị nhạt màu.
-
-## 2. Hợp đồng nguyên tố (D1) — bảy thứ, chốt một lần
-
-Áp dụng cho PyQt6: dùng widget qfluent (`PushButton`, `LineEdit`, `CardWidget`, …) và QSS token ở §1. Không đẻ biến thể giữa chừng.
-
-| Nguyên tố | Contract |
-| --- | --- |
-| **Nút** | Bốn dạng (I1) → map sang class Fluent (không QSS variant): `PrimaryPushButton` (accent), `PushButton` (mặc định), `TransparentPushButton` (quiet), `TogglePushButton` (chọn trạng thái). Nút **chỉ có icon** → `TransparentToolButton`. Min tap target 34px. |
-| **Badge trạng thái** | Pill bo `--radius-sm`, padding 2px 8px, font caption 11px 600. Nền soft + chữ màu trạng thái (M7): todo=xám, doing=xám+icon dot, snooze=hổ phách, done=xanh lá, danger=đỏ. Cùng một trạng thái = cùng một hình ở mọi view (D2). |
-| **Ô nhập** | `LineEdit` / `EditableComboBox` / `SpinBox` / `TimeEdit` của Fluent — cao 34px, bo 5px, viền 1px, focus viền accent của thư viện. Placeholder màu `--fg-muted` (Fluent không style placeholder → set QPalette). |
-| **Card** | Padding 16px (md) / 20px (lg), bo `--radius-lg`, viền 1px `--border`, bg `--surface`. Không shadow. Card nổi (KPI, timer) dùng bg `--surface-2` + viền accent-soft. |
-| **Dòng danh sách** | Chiều cao 44px, padding 10px 12px, hover bg `--surface-2`, selected bg `--accent-soft` + viền trái accent 2px. Checkbox 20px. |
-| **Modal / dialog** | Bề rộng 480px (sm) / 640px (md) / 800px (lg). Nút đặt phải, primary phải; cho bấm ra ngoài đóng trừ khi có ô gõ xác nhận (I20). Backdrop `rgba(0,0,0,0.5)` + blur 8px. |
-| **Trạng thái rỗng** | Icon 40px muted, tiêu đề 14px 650, câu phụ 12px muted, nút primary (nếu có action). Căn giữa trong vùng. |
-
-## 3. Bảng ánh xạ trạng thái (D2) — một chỗ duy nhất
-
-```python
-STATUS = {
-    "todo":   {"label": "Cần làm",   "color": "muted",   "icon": "circle"},
-    "doing":  {"label": "Đang làm",  "color": "muted",   "icon": "circle-dot"},
-    "snooze": {"label": "Tạm hoãn",  "color": "warning", "icon": "clock"},
-    "done":   {"label": "Xong",      "color": "success", "icon": "circle-check"},
-    "error":  {"label": "Lỗi",       "color": "danger",  "icon": "circle-x"},
-}
-```
-
-Dùng y hệt ở Workbench (task list), Settings (reminder), overlay (OCR status). Trạng thái làm tiêu đề cột → icon + tên + số đếm (không pill). Trạng thái làm giá trị ô → pill.
-
-## 4. Layout contract
+1. **Một conic gradient duy nhất** cho cả chu vi, quay theo phase. Không vẽ từng cạnh riêng — đó là lý do bản cũ có seam ở 4 góc và đọc ra như các vòng đồng tâm.
+2. **Quầng sáng là 4 linear gradient** (mỗi cạnh một cái), màu lấy từ bảng màu theo phase với offset khác nhau để chạy cùng sweep, không phải màu tĩnh.
+3. Chỉ vẽ vector, không dựng buffer ngoài. Khôi phục `painter.setOpacity(1.0)` trước khi trả về.
+4. Không patch QSS cho viền — đây là phần app tự sở hữu.
 
 ### 4.1 Vùng (D6) — đặt tên một lần
 
