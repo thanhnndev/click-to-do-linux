@@ -113,6 +113,24 @@ Tiếng Việt phải giữ dấu → dùng Noto Sans (đã có). Không dùng f
 
 Dáng thanh cuộn trong `tokens.css` (từ `* { --scrollbar-thumb` đến hết `.scrollbar-clean`) + component `ScrollbarAutohide` (I18). Thiếu là trình duyệt/Qt vẽ thanh mặc định to và thô.
 
+### 1.6 Viền aurora của overlay chụp màn hình
+
+Overlay là công cụ trên ảnh chụp nên viền do **app** tự vẽ (`ui/aurora.py`), không dùng widget Fluent. Tham chiếu: Windows 11 / Copilot "moving border" (conic gradient quay + mask ring).
+
+| Token | Giá trị | Ghi chú |
+| --- | --- | --- |
+| `--aurora-rim` | 6.5px | Viền neon sát cạnh màn hình |
+| `--aurora-halo` | 14px, alpha 0.28 | Quầng sáng mờ ngoài viền |
+| `--aurora-core` | 1.6px, alpha 0.6 | Chân tóc sáng ở mép trong của viền |
+| `--aurora-bloom` | 84px, alpha 92/255 | Quầng trong, mờ dần theo `exp(-d/30)` |
+| `--aurora-rotation` | 7s / vòng | Quét sắc màu, 1.5 nhịp thở trong mỗi vòng |
+
+**Quy tắc bắt buộc:**
+
+1. **Một gradient nón duy nhất** cho cả chu vi. Tuyệt đối không set phase khác nhau cho từng cạnh — đó là lý do bản cũ có đường seam ở 4 góc.
+2. **Quầng trong vẽ bằng 4 linear gradient** (mỗi cạnh một cái, alpha curve nằm trong các stop). Vẽ bằng chồng các stroke lồng nhau thì đẹp hơn một chút nhưng **44ms/khung ở 1080p**; dạng band chỉ **2ms/khung**.
+3. Chỉ vẽ vector, không dựng buffer ngoài. Mọi thao tác phải khôi phục `painter.setOpacity(1.0)` trước khi trả về, nếu không phần vẽ sau trong `paintEvent` sẽ bị nhạt màu.
+
 ## 2. Hợp đồng nguyên tố (D1) — bảy thứ, chốt một lần
 
 Áp dụng cho PyQt6: dùng widget qfluent (`PushButton`, `LineEdit`, `CardWidget`, …) và QSS token ở §1. Không đẻ biến thể giữa chừng.
