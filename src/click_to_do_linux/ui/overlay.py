@@ -1,19 +1,28 @@
 """Zero-Scroll Niri Floating Overlay with Live Screen Search, Color Picker, and Rich Click-to-Do UX."""
 
+import math
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
+import numpy as np
 from PIL import Image
-from PyQt6.QtCore import QPoint, QRect, QRectF, QSize, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QBrush,
     QColor,
     QFont,
     QImage,
     QKeySequence,
+    QLinearGradient,
     QPainter,
+    QPainterPath,
+    QConicalGradient,
     QPen,
+    QPixmap,
+    QPolygonF,
+    QRadialGradient,
     QShortcut,
 )
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
@@ -29,7 +38,7 @@ from ..config import Config, load_config
 from ..utils.clipboard import ClipboardManager
 from .action_bar import ActionBar
 from .ai_dialog import AIDialog
-from .aurora import AuroraSpec, draw_aurora_border
+from .aurora import COPILOT_PALETTE, AuroraSpec, _phase_color, draw_aurora_border
 from ..i18n import t
 from .icons import get_icon
 from .theme import overlay_style
@@ -92,12 +101,23 @@ class OverlayWindow(QWidget):
         self.processed_image: Optional[Image.Image] = None
         self.processed_rect: Optional[QRect] = None
         self.processed_pixmap: Optional[QPixmap] = None
+        self._image_transition_started: Optional[float] = None
+        self._image_transition_rect: Optional[QRect] = None
+        self._image_transition_duration = 1.6
+        self._selection_animation_active = False
+        self._selection_settle_started: Optional[float] = None
+        self._selection_settle_duration = 0.52
+        self._image_result_transition_started: Optional[float] = None
+        self._image_result_transition_duration = 0.52
+        self._pending_image_result = None
+        self._region_overlay_started: Optional[float] = None
+        self._bg_cache: Optional[QPixmap] = None
 
         # Windows 11 Copilot Glowing Border Aura animation state
         self.glow_phase = 0.0
         self._anim_origin: Optional[float] = None
         self.anim_timer = QTimer(self)
-        self.anim_timer.setInterval(28)  # ~35 FPS smooth ambient aura
+        self.anim_timer.setInterval(16)  # ~60 FPS; frames are cheap enough to keep up
         self.anim_timer.timeout.connect(self._on_anim_tick)
         self.anim_timer.start()
 
@@ -232,54 +252,44 @@ class OverlayWindow(QWidget):
         if self._anim_origin is None:
             self._anim_origin = now
         self.glow_phase = ((now - self._anim_origin) / AURORA.wave_period) % 1.0
+        if self._image_transition_started is not None:
+            if now - self._image_transition_started >= self._image_transition_duration:
+                self._image_transition_started = None
+                self._image_transition_rect = None
+                self._selection_settle_started = now
+                self._region_overlay_started = now - 1.0  # already at full intensity
+                if self._pending_image_result is not None:
+                    task_name, result_img = self._pending_image_result
+                    self._pending_image_result = None
+                    self._complete_image_task(task_name, result_img)
+        if (self._selection_settle_started is not None
+                and now - self._selection_settle_started >= self._selection_settle_duration
+                and not self.processing_image):
+            self._selection_settle_started = None
+        if (self._image_result_transition_started is not None
+                and now - self._image_result_transition_started >= self._image_result_transition_duration):
+            self._image_result_transition_started = None
         self.update()
+
+    def _image_transition_progress(self) -> float:
+        if self._image_transition_started is None:
+            return 1.0
+        elapsed = time.monotonic() - self._image_transition_started
+        linear = min(1.0, max(0.0, elapsed / self._image_transition_duration))
+        return linear * linear * (3.0 - 2.0 * linear)
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
-        # 1. Draw frozen screen
-        target_rect = QRectF(0, 0, self.width(), self.height())
-        source_rect = QRectF(0, 0, self.captured.physical_w, self.captured.physical_h)
-        painter.drawPixmap(target_rect, self.captured.pixmap, source_rect)
+        # 1-2. Frozen screen with a subtle dimming backdrop, pre-composited once.
+        painter.drawPixmap(0, 0, self._background())
 
-        # 2. Subtle dimming backdrop
-        painter.fillRect(self.rect(), QColor(9, 9, 12, 60))
-
-        # 2.5 Signature Windows 11 / Copilot glowing border aura
-        self._draw_windows11_glowing_border(painter)
-
-        # 2.6 Image processing: keep the frame open. While busy, draw the same
-        #     animated aurora wave border around the selected region (no full-screen
-        #     overlay, no loading text). When done, composite the processed result
-        #     onto the background in place of the original crop.
-        if self.processed_rect is not None:
-            r = self.processed_rect
-            if self.processed_pixmap is not None and not self.processed_pixmap.isNull():
-                painter.drawPixmap(r, self.processed_pixmap)
-            if self.processing_image:
-                # Aurora overlay covering the entire selected region with opacity,
-                # animated like a scanning sweep (wave travels across the region).
-                painter.save()
-                # Dim the region slightly so the aurora glow reads on top.
-                painter.fillRect(r, QColor(9, 9, 12, 110))
-                painter.translate(r.x(), r.y())
-                from .aurora import AuroraSpec
-                fill_spec = AuroraSpec(
-                    rim_width=0.0,
-                    glow_depth=max(r.width(), r.height()),
-                    wave_amplitude=max(6.0, min(r.width(), r.height()) * 0.08),
-                    wave_count=AURORA.wave_count,
-                    wave_period=AURORA.wave_period,
-                    glow_strength=AURORA.glow_strength,
-                    second_wave_count=AURORA.second_wave_count,
-                    second_wave_amplitude=AURORA.second_wave_amplitude * 0.6,
-                    second_wave_strength=AURORA.second_wave_strength,
-                    second_wave_phase=AURORA.second_wave_phase,
-                )
-                draw_aurora_border(painter, r.width(), r.height(), self.glow_phase, fill_spec)
-                painter.restore()
+        # 2.5 Keep the ambient screen rim beneath content. Processing flow is
+        # drawn after the selection crop so the crop cannot erase its final edge.
+        if self._image_transition_started is None:
+            self._draw_windows11_glowing_border(painter)
 
         # 3. Draw OCR text highlights
         for box in self.ocr_boxes:
@@ -335,9 +345,44 @@ class OverlayWindow(QWidget):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(rect, 4, 4)
 
+        # Aurora overlay over the image inside the selected frame.
+        if self.processed_rect is not None:
+            r = self.processed_rect
+            if self.processed_pixmap is not None and not self.processed_pixmap.isNull():
+                painter.drawPixmap(r, self.processed_pixmap)
+            if self._image_transition_started is not None:
+                # The liquid has reached the frame: it floods inwards from the
+                # frame edge, so the outside flow becomes the inside overlay.
+                q = min(1.0, max(0.0, (self._image_transition_progress() - 0.45) / 0.45))
+                if q > 0.0:
+                    self._draw_region_aurora(painter, QRectF(r), 1.0, q)
+            elif self._region_overlay_started is not None:
+                ramp = min(1.0, (time.monotonic() - self._region_overlay_started) / 0.6)
+                ramp = ramp * ramp * (3.0 - 2.0 * ramp)
+                # Full-intensity while processing, calmer once the result is shown.
+                self._draw_region_aurora(painter, QRectF(r), ramp * (1.0 if self.processing_image else 0.7))
+
+        if self._image_transition_started is not None:
+            self._draw_windows11_glowing_border(painter)
+
         # 6. Draw Color Picker Loupe if active
         if self.color_picker_active:
             self._draw_color_loupe(painter)
+
+    def _background(self) -> QPixmap:
+        """Frozen screen + dimming, scaled to the widget once instead of every frame."""
+        if self._bg_cache is None:
+            dpr = self.devicePixelRatioF()
+            bg = QPixmap(int(self.width() * dpr), int(self.height() * dpr))
+            bg.setDevicePixelRatio(dpr)
+            qp = QPainter(bg)
+            qp.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            qp.drawPixmap(QRectF(0, 0, self.width(), self.height()), self.captured.pixmap,
+                          QRectF(0, 0, self.captured.physical_w, self.captured.physical_h))
+            qp.fillRect(QRectF(0, 0, self.width(), self.height()), QColor(9, 9, 12, 60))
+            qp.end()
+            self._bg_cache = bg
+        return self._bg_cache
 
     def _get_pixel_hex_at(self, pos: QPoint) -> Tuple[str, QColor]:
         px = min(self.captured.image.width - 1, max(0, int(pos.x() * self.captured.scale_factor)))
@@ -366,14 +411,268 @@ class OverlayWindow(QWidget):
         painter.drawText(bx + 32, by + 20, hex_code)
 
     def _draw_windows11_glowing_border(self, painter: QPainter):
-        """Draws the signature Windows 11 / Copilot iridescent animated border.
-
-        While processing an image the border wave "rolls back" (is hidden) and
-        the aurora overlay lives on the selected region instead.
-        """
-        if self.processing_image:
+        """Draw the screen rim feeding a liquid front into the selected image."""
+        if self._image_transition_started is not None and self._image_transition_rect is not None:
+            progress = self._image_transition_progress()
+            # The rim hands over to the liquid: they cross-fade over the same
+            # edge, so the flow appears to grow out of the ambient border.
+            hand_over = min(1.0, progress / 0.3)
+            hand_over = hand_over * hand_over * (3.0 - 2.0 * hand_over)
+            painter.save()
+            painter.setOpacity(1.0 - hand_over)
+            self._draw_rim(painter)
+            painter.restore()
+            self._draw_liquid_border_flow(
+                painter, self._image_transition_rect.normalized(), progress
+            )
             return
-        draw_aurora_border(painter, self.width(), self.height(), self.glow_phase, AURORA)
+        # The ambient rim stays on while selecting; only the processing
+        # animation (which owns the selection frame) replaces it.
+        if self.processing_image or self.processed_pixmap is not None:
+            return
+        self._draw_rim(painter)
+
+    def _draw_rim(self, painter: QPainter):
+        """Screen-edge aurora, rendered at reduced size: it is a soft glow, and
+        the per-slice drawing cost scales with the canvas size."""
+        k = 0.4
+        spec = replace(
+            AURORA,
+            glow_depth=AURORA.glow_depth * k,
+            wave_amplitude=AURORA.wave_amplitude * k,
+            second_wave_amplitude=AURORA.second_wave_amplitude * k,
+        )
+        img = QImage(max(2, int(self.width() * k)), max(2, int(self.height() * k)),
+                     QImage.Format.Format_ARGB32_Premultiplied)
+        img.fill(0)
+        qp = QPainter(img)
+        draw_aurora_border(qp, img.width(), img.height(), self.glow_phase, spec)
+        qp.end()
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.drawImage(QRectF(0, 0, self.width(), self.height()), img)
+        painter.restore()
+
+    @staticmethod
+    def _lowres_canvas(w: float, h: float, scale: float) -> Tuple[QImage, QPainter]:
+        """Transparent low-res canvas; upscaling it smoothly gives a free blur."""
+        img = QImage(max(2, int(w * scale)), max(2, int(h * scale)),
+                     QImage.Format.Format_ARGB32_Premultiplied)
+        img.fill(0)
+        qp = QPainter(img)
+        qp.setRenderHint(QPainter.RenderHint.Antialiasing)
+        qp.setPen(Qt.PenStyle.NoPen)
+        qp.scale(img.width() / w, img.height() / h)
+        return img, qp
+
+    def _draw_liquid_border_flow(self, painter: QPainter, rect: QRect, progress: float):
+        """Aurora liquid poured in from the screen edges toward the crop.
+
+        A soft, rippling body whose inner front travels from the screen border
+        to the selection frame, brightest at the front. It is painted on a
+        low-res canvas and scaled up, so it is smooth with no stroked lines.
+        """
+        frame = QRectF(rect)
+        sw, sh = float(self.width()), float(self.height())
+        p = min(1.0, max(0.0, progress / 0.6))
+        ease = p * p * p * (p * (p * 6.0 - 15.0) + 10.0)  # smootherstep
+        appear = min(1.0, progress / 0.15)
+        appear = appear * appear * (3.0 - 2.0 * appear)
+        fade = appear * min(1.0, max(0.0, (1.0 - progress) / 0.2))
+        if fade <= 0.0:
+            return
+        # The front starts just inside the screen rim (where the ambient glow
+        # lives) and closes in on the frame, each side travelling its own way.
+        rim = 22.0
+        start = QRectF(rim, rim, sw - 2 * rim, sh - 2 * rim)
+        front = QRectF(
+            start.left() + (frame.left() - start.left()) * ease,
+            start.top() + (frame.top() - start.top()) * ease,
+            start.width() + (frame.width() - start.width()) * ease,
+            start.height() + (frame.height() - start.height()) * ease,
+        )
+        radius = 4.0 + 30.0 * (1.0 - ease)
+        amp = 16.0 * math.sin(math.pi * p)
+        t = time.monotonic() * 0.5
+
+        img, qp = self._lowres_canvas(sw, sh, 0.2)
+        grad = QConicalGradient(sw / 2.0, sh / 2.0, -self.glow_phase * 360.0)
+        for pos, (r, g, b) in zip((0.0, 0.25, 0.5, 0.75, 1.0), COPILOT_PALETTE + (COPILOT_PALETTE[0],)):
+            grad.setColorAt(pos, QColor(r, g, b))
+        qp.setBrush(QBrush(grad))
+
+        def hole(expand: float) -> QPainterPath:
+            return self._rippled_rrect(front.adjusted(-expand, -expand, expand, expand),
+                                       radius + expand, amp, t)
+
+        screen_path = QPainterPath()
+        screen_path.addRect(QRectF(-4, -4, sw + 8, sh + 8))
+        inner = hole(0.0)
+        # Faint body: everything between the screen edge and the front.
+        body = QPainterPath(screen_path)
+        body.addPath(inner)
+        body.setFillRule(Qt.FillRule.OddEvenFill)
+        qp.setOpacity(0.10)
+        qp.drawPath(body)
+        # Crest: thin soft bands hugging the front, accumulating towards it.
+        for expand in (130.0, 70.0, 34.0, 12.0):
+            band = QPainterPath(hole(expand))
+            band.addPath(inner)
+            band.setFillRule(Qt.FillRule.OddEvenFill)
+            qp.setOpacity(0.13)
+            qp.drawPath(band)
+        qp.end()
+
+        painter.save()
+        painter.setClipRect(QRectF(0, 0, sw, sh))
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.setOpacity(fade)
+        painter.drawImage(QRectF(0, 0, sw, sh), img)
+        painter.restore()
+
+    @staticmethod
+    def _rippled_rrect(rect: QRectF, radius: float, amp: float, t: float) -> QPainterPath:
+        """Rounded rect whose outline carries a travelling wave along its normal.
+
+        Points and normals are computed analytically with numpy (edges plus
+        corner arcs), so this stays cheap enough to run every frame.
+        """
+        l, tp, r, b = rect.left(), rect.top(), rect.right(), rect.bottom()
+        rad = max(0.5, min(radius, rect.width() / 2.0, rect.height() / 2.0))
+        spacing = max(16.0, 2.0 * (rect.width() + rect.height()) / 110.0)
+        pts, nrm = [], []
+
+        def edge(p0, p1, normal):
+            n = max(2, int(math.hypot(p1[0] - p0[0], p1[1] - p0[1]) / spacing))
+            k = np.linspace(0.0, 1.0, n, endpoint=False, dtype=np.float32)[:, None]
+            pts.append(np.array(p0, np.float32) + k * (np.array(p1, np.float32) - np.array(p0, np.float32)))
+            nrm.append(np.tile(np.array(normal, np.float32), (n, 1)))
+
+        def arc(cx, cy, a0, a1):
+            n = max(3, int(rad * math.pi / 2.0 / spacing) + 2)
+            ang = np.linspace(math.radians(a0), math.radians(a1), n, endpoint=False, dtype=np.float32)
+            unit = np.stack([np.cos(ang), np.sin(ang)], axis=1)
+            pts.append(np.array([cx, cy], np.float32) + rad * unit)
+            nrm.append(unit)
+
+        edge((l + rad, tp), (r - rad, tp), (0, -1))
+        arc(r - rad, tp + rad, -90, 0)
+        edge((r, tp + rad), (r, b - rad), (1, 0))
+        arc(r - rad, b - rad, 0, 90)
+        edge((r - rad, b), (l + rad, b), (0, 1))
+        arc(l + rad, b - rad, 90, 180)
+        edge((l, b - rad), (l, tp + rad), (-1, 0))
+        arc(l + rad, tp + rad, 180, 270)
+
+        pts_a, nrm_a = np.concatenate(pts), np.concatenate(nrm)
+        seg = np.hypot(*np.diff(np.vstack([pts_a, pts_a[:1]]), axis=0).T)
+        f = np.concatenate([[0.0], np.cumsum(seg[:-1])]) / max(float(seg.sum()), 1.0)
+        tau = 2.0 * math.pi
+        off = amp * (np.sin(tau * (f * 6.0 - t)) + 0.35 * np.sin(tau * (f * 11.0 + t * 0.7)))
+        out = pts_a + nrm_a * off[:, None].astype(np.float32)
+        poly = QPolygonF([QPointF(float(x), float(y)) for x, y in out])
+        path = QPainterPath()
+        path.addPolygon(poly)
+        path.closeSubpath()
+        return path
+
+    _aurora_lut = None
+
+    @classmethod
+    def _palette_lut(cls):
+        if cls._aurora_lut is None:
+            cls._aurora_lut = np.array(
+                [[c.red(), c.green(), c.blue()]
+                 for c in (_phase_color(i / 255.0, 0.0) for i in range(256))],
+                dtype=np.float32,
+            )
+        return cls._aurora_lut
+
+    def _aurora_field_image(self, w: float, h: float, level: float) -> QImage:
+        """Organic aurora: a domain-warped flow field, glowing along its veins.
+
+        Several sine fields travel in different directions at incommensurate
+        speeds, so the light drifts and swirls in every direction and never
+        repeats. Computed with numpy on a tiny grid and scaled up smoothly.
+        """
+        gw = max(8, int(w * 0.18))
+        gh = max(8, int(h * 0.18))
+        t = time.monotonic()
+        aspect = w / h
+        xs = np.linspace(0.0, aspect, gw, dtype=np.float32)[None, :]
+        ys = np.linspace(0.0, 1.0, gh, dtype=np.float32)[:, None]
+        # Warp the coordinates so the veins curl instead of forming straight bands.
+        wx = xs + 0.18 * np.sin(3.1 * ys + 0.55 * t) + 0.10 * np.sin(5.3 * xs - 0.8 * t)
+        wy = ys + 0.18 * np.sin(2.7 * xs - 0.45 * t) + 0.10 * np.sin(4.7 * ys + 0.7 * t)
+        n = (np.sin(4.3 * wx + 1.7 * wy + 0.62 * t)
+             + np.sin(-3.1 * wx + 3.7 * wy - 0.51 * t + 1.3)
+             + np.sin(5.9 * wx - 2.3 * wy + 0.37 * t + 2.9)
+             + 0.8 * np.sin(6.0 * np.hypot(wx - 0.5 * aspect, wy - 0.5) - 0.7 * t)) / 3.8
+        # Glow along two iso-lines of the field = flowing luminous veins.
+        veins = np.exp(-((n - 0.15) / 0.17) ** 2) + 0.8 * np.exp(-((n + 0.38) / 0.2) ** 2)
+        haze = 0.5 + 0.5 * n
+        # A flowing wash that covers the whole frame, with brighter veins on top.
+        strength = (0.42 + 0.42 * np.clip(veins, 0.0, 1.0) + 0.16 * haze) * level
+        hue = (0.5 + 0.5 * np.sin(2.2 * wx - 1.6 * wy + 0.33 * t + 2.0 * n)) * 255.0
+        rgb = self._palette_lut()[hue.astype(np.int32).clip(0, 255)]
+        alpha = np.clip(strength * 0.62, 0.0, 1.0)  # about 0.26 minimum, 0.6 on the veins
+        buf = np.empty((gh, gw, 4), dtype=np.uint8)
+        buf[..., 0] = rgb[..., 2] * alpha  # premultiplied BGRA
+        buf[..., 1] = rgb[..., 1] * alpha
+        buf[..., 2] = rgb[..., 0] * alpha
+        buf[..., 3] = alpha * 255.0
+        return QImage(buf.data, gw, gh, gw * 4,
+                      QImage.Format.Format_ARGB32_Premultiplied).copy()
+
+    def _flood_hole(self, w: float, h: float, q: float, layer: int) -> Optional[QPainterPath]:
+        """Not-yet-flooded centre (local coords); layers feather its edge.
+
+        At q=0 every layer covers the whole frame (nothing shown); at q=1 every
+        layer has collapsed (everything shown).
+        """
+        q = q * q * (3.0 - 2.0 * q)
+        depth = max(0.0, q * (min(w, h) / 2.0 + 52.0) - 52.0 + 13.0 * layer)
+        rect = QRectF(depth, depth, w - 2 * depth, h - 2 * depth)
+        if rect.width() <= 2 or rect.height() <= 2:
+            return None
+        return self._rippled_rrect(rect, 10.0, 8.0 * math.sin(math.pi * q), time.monotonic() * 0.5)
+
+    def _draw_region_aurora(self, painter: QPainter, rect: QRectF, level: float,
+                            flood: float = 1.0):
+        """Aurora light washing over the whole image, clipped to the frame.
+
+        Rendered on a low-res canvas (smooth, no slice seams) and alpha-blended
+        so the picture underneath stays readable: drifting colour
+        pools, wavy aurora ribbons and a slow sheen.
+        """
+        if level <= 0.0 or rect.width() < 4 or rect.height() < 4:
+            return
+        w, h = rect.width(), rect.height()
+        tau = 2.0 * math.pi
+        img = self._aurora_field_image(w, h, level)
+
+        if flood < 1.0:
+            # Erase the not-yet-reached centre with a feathered edge so the
+            # liquid seems to seep inwards rather than being cut by a mask.
+            qp2 = QPainter(img)
+            qp2.setRenderHint(QPainter.RenderHint.Antialiasing)
+            qp2.setPen(Qt.PenStyle.NoPen)
+            qp2.scale(img.width() / w, img.height() / h)
+            qp2.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationOut)
+            qp2.setBrush(QColor(0, 0, 0))
+            qp2.setOpacity(0.2)
+            for layer in range(5):
+                hole = self._flood_hole(w, h, flood, layer)
+                if hole is not None:
+                    qp2.drawPath(hole)
+            qp2.end()
+        mask = QPainterPath()
+        mask.addRoundedRect(rect, 4, 4)
+        painter.save()
+        painter.setClipPath(mask)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.drawImage(rect, img)
+        painter.restore()
 
     def mouseDoubleClickEvent(self, event):
         """Double-click any text box to immediately copy it and close overlay."""
@@ -417,6 +716,13 @@ class OverlayWindow(QWidget):
             self.processed_image = None
             self.processed_rect = None
             self.processed_pixmap = None
+            self._image_transition_started = None
+            self._image_transition_rect = None
+            self._selection_animation_active = False
+            self._selection_settle_started = None
+            self._pending_image_result = None
+            self._image_result_transition_started = None
+            self._region_overlay_started = None
 
     def mouseMoveEvent(self, event):
         pos = event.pos()
@@ -473,6 +779,7 @@ class OverlayWindow(QWidget):
                     self._show_actions_for_text(text_inside, r_tuple, region=True)
                 else:
                     self.region_text_mode = False
+                    self.processed_rect = rect
                     crop = SegmentationEngine.crop_logical_region(
                         self.captured.image, r_tuple, self.captured.scale_factor
                     )
@@ -586,10 +893,19 @@ class OverlayWindow(QWidget):
             self.processing_image = True
             self.processed_image = None
             self.processed_pixmap = None
+            self._selection_animation_active = bool(self.selected_rect and not self.selected_rect.isNull())
+            self._selection_settle_started = None
+            self._image_result_transition_started = None
+            self._region_overlay_started = None
             if self.selected_rect and not self.selected_rect.isNull():
                 self.processed_rect = self.selected_rect.normalized()
+                self._image_transition_rect = self.processed_rect
+                self._image_transition_started = time.monotonic()
             else:
+                self._selection_animation_active = False
                 self.processed_rect = None
+                self._image_transition_rect = None
+                self._image_transition_started = None
             self.img_worker = ImageTaskWorker(action_name, payload)
             self.img_worker.finished.connect(self._on_image_task_done)
             self.img_worker.start()
@@ -629,7 +945,23 @@ class OverlayWindow(QWidget):
             self.ai_dialog.raise_()
 
     def _on_image_task_done(self, task_name: str, result_img):
+        if result_img and self._image_transition_started is not None:
+            self._pending_image_result = (task_name, result_img)
+            return
+        self._complete_image_task(task_name, result_img)
+
+    def _complete_image_task(self, task_name: str, result_img):
         self.processing_image = False
+        self._image_transition_started = None
+        self._image_transition_rect = None
+        self._image_result_transition_started = (
+            time.monotonic()
+            if result_img and self.processed_rect is not None
+            else None
+        )
+        if not result_img:
+            self._selection_animation_active = False
+            self._region_overlay_started = None
         if result_img:
             ClipboardManager.copy_image(result_img)
             if task_name == "remove_bg":
