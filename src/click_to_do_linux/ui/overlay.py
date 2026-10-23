@@ -33,6 +33,7 @@ from ..ai.screen_cache import screen_analysis_cache
 from ..ai.llm import LLMService
 from ..ai.ocr import OCREngine, TextBox
 from ..ai.segmentation import SegmentationEngine
+from ..ai.segmentation_proc import SegmentationClient
 from ..capture.screen import CapturedScreen
 from ..config import Config, load_config
 from ..utils.clipboard import ClipboardManager
@@ -52,16 +53,28 @@ AURORA = AuroraSpec()
 class ImageTaskWorker(QThread):
     finished = pyqtSignal(str, object)
 
-    def __init__(self, task_name: str, image: Image.Image):
+    def __init__(self, task_name: str, image: Image.Image, save_directory: str = "."):
         super().__init__()
         self.task_name = task_name
+        self.save_directory = save_directory
         self.image = image
 
     def run(self):
-        if self.task_name == "remove_bg":
-            res = SegmentationEngine.remove_background(self.image)
-        else:
-            res = SegmentationEngine.blur_background(self.image)
+        try:
+            # Heavy inference runs in its own process so it cannot stall the UI.
+            res = SegmentationClient.run(self.task_name, self.image)
+        except Exception as e:
+            print(f"[ImageTaskWorker] worker process failed ({e}); running in-process")
+            SegmentationClient.shutdown()
+            if self.task_name == "remove_bg":
+                res = SegmentationEngine.remove_background(self.image)
+            else:
+                res = SegmentationEngine.blur_background(self.image)
+        if res is not None and self.task_name == "remove_bg":
+            # Disk I/O stays off the UI thread so it cannot drop animation frames.
+            save_dir = Path(self.save_directory)
+            save_dir.mkdir(parents=True, exist_ok=True)
+            res.save(save_dir / f"cutout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
         self.finished.emit(self.task_name, res)
 
 
@@ -117,6 +130,7 @@ class OverlayWindow(QWidget):
         self.glow_phase = 0.0
         self._anim_origin: Optional[float] = None
         self.anim_timer = QTimer(self)
+        self.anim_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.anim_timer.setInterval(16)  # ~60 FPS; frames are cheap enough to keep up
         self.anim_timer.timeout.connect(self._on_anim_tick)
         self.anim_timer.start()
@@ -125,6 +139,7 @@ class OverlayWindow(QWidget):
         self._init_widgets()
         apply_input_palette(self, self.config.ui_theme)
         self._start_ocr()
+        SegmentationClient.prewarm()
 
     def _setup_window(self):
         # IMPORTANT FOR NIRI: We use a regular top-level frameless window with fixed geometry
@@ -906,7 +921,7 @@ class OverlayWindow(QWidget):
                 self.processed_rect = None
                 self._image_transition_rect = None
                 self._image_transition_started = None
-            self.img_worker = ImageTaskWorker(action_name, payload)
+            self.img_worker = ImageTaskWorker(action_name, payload, self.config.save_directory)
             self.img_worker.finished.connect(self._on_image_task_done)
             self.img_worker.start()
             self.update()
@@ -964,11 +979,6 @@ class OverlayWindow(QWidget):
             self._region_overlay_started = None
         if result_img:
             ClipboardManager.copy_image(result_img)
-            if task_name == "remove_bg":
-                save_dir = Path(self.config.save_directory)
-                save_dir.mkdir(parents=True, exist_ok=True)
-                fn = save_dir / f"cutout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                result_img.save(fn)
             # Keep the capture frame open and composite the processed result
             # onto the background in place of the original crop.
             self.processed_image = result_img
