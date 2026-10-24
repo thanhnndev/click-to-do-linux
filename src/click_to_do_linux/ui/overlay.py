@@ -122,6 +122,9 @@ class OverlayWindow(QWidget):
         self._selection_settle_duration = 0.52
         self._image_result_transition_started: Optional[float] = None
         self._image_result_transition_duration = 0.52
+        # "Magic -> boom" reveal played when a processed result arrives.
+        self._reveal_started: Optional[float] = None
+        self._reveal_duration = 0.6
         self._pending_image_result = None
         self._region_overlay_started: Optional[float] = None
         self._bg_cache: Optional[QPixmap] = None
@@ -284,6 +287,10 @@ class OverlayWindow(QWidget):
         if (self._image_result_transition_started is not None
                 and now - self._image_result_transition_started >= self._image_result_transition_duration):
             self._image_result_transition_started = None
+        if (self._reveal_started is not None
+                and now - self._reveal_started >= self._reveal_duration):
+            self._reveal_started = None
+            self._region_overlay_started = None  # aurora fully gone: show the result
         self.update()
 
     def _image_transition_progress(self) -> float:
@@ -355,7 +362,8 @@ class OverlayWindow(QWidget):
                 rect.width() * scale_x,
                 rect.height() * scale_y,
             )
-            painter.drawPixmap(QRectF(rect), self.captured.pixmap, src)
+            if self.processed_pixmap is None:
+                painter.drawPixmap(QRectF(rect), self.captured.pixmap, src)
             painter.setPen(QPen(QColor(255, 255, 255, 220), 1.2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(rect, 4, 4)
@@ -364,6 +372,7 @@ class OverlayWindow(QWidget):
         if self.processed_rect is not None:
             r = self.processed_rect
             if self.processed_pixmap is not None and not self.processed_pixmap.isNull():
+                self._draw_result_backdrop(painter, QRectF(r))
                 painter.drawPixmap(r, self.processed_pixmap)
             if self._image_transition_started is not None:
                 # The liquid has reached the frame: it floods inwards from the
@@ -371,11 +380,12 @@ class OverlayWindow(QWidget):
                 q = min(1.0, max(0.0, (self._image_transition_progress() - 0.45) / 0.45))
                 if q > 0.0:
                     self._draw_region_aurora(painter, QRectF(r), 1.0, q)
-            elif self._region_overlay_started is not None:
+            elif self._reveal_started is not None:
+                self._draw_reveal(painter, QRectF(r))
+            elif self.processing_image and self._region_overlay_started is not None:
                 ramp = min(1.0, (time.monotonic() - self._region_overlay_started) / 0.6)
                 ramp = ramp * ramp * (3.0 - 2.0 * ramp)
-                # Full-intensity while processing, calmer once the result is shown.
-                self._draw_region_aurora(painter, QRectF(r), ramp * (1.0 if self.processing_image else 0.7))
+                self._draw_region_aurora(painter, QRectF(r), ramp)
 
         if self._image_transition_started is not None:
             self._draw_windows11_glowing_border(painter)
@@ -652,8 +662,35 @@ class OverlayWindow(QWidget):
             return None
         return self._rippled_rrect(rect, 10.0, 8.0 * math.sin(math.pi * q), time.monotonic() * 0.5)
 
+    def _draw_result_backdrop(self, painter: QPainter, rect: QRectF):
+        """Checkerboard under a cut-out so transparency reads as transparency."""
+        painter.save()
+        mask = QPainterPath()
+        mask.addRoundedRect(rect, 4, 4)
+        painter.setClipPath(mask)
+        painter.fillRect(rect, QColor(34, 36, 42))
+        step = 10.0
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(52, 55, 63))
+        cols, rows = int(rect.width() // step) + 1, int(rect.height() // step) + 1
+        for j in range(rows):
+            for i in range((j & 1), cols, 2):
+                painter.drawRect(QRectF(rect.x() + i * step, rect.y() + j * step, step, step))
+        painter.restore()
+
+    def _draw_reveal(self, painter: QPainter, rect: QRectF):
+        """The aurora melts away from the centre outwards, revealing the result."""
+        el = time.monotonic() - self._reveal_started
+        w, h = rect.width(), rect.height()
+        d = min(1.0, el / 0.55)
+        if d < 1.0:
+            ease = d * d * (3.0 - 2.0 * d)
+            max_r = math.hypot(w, h) / 2.0
+            feather = max_r * 0.9
+            self._draw_region_aurora(painter, rect, 1.0, reveal=(ease * (max_r + feather * 0.5), feather))
+
     def _draw_region_aurora(self, painter: QPainter, rect: QRectF, level: float,
-                            flood: float = 1.0):
+                            flood: float = 1.0, reveal: Optional[Tuple[float, float]] = None):
         """Aurora light washing over the whole image, clipped to the frame.
 
         Rendered on a low-res canvas (smooth, no slice seams) and alpha-blended
@@ -681,6 +718,20 @@ class OverlayWindow(QWidget):
                 if hole is not None:
                     qp2.drawPath(hole)
             qp2.end()
+        if reveal is not None:
+            # Erase everything inside the expanding shockwave (feathered).
+            radius, feather = reveal
+            qp3 = QPainter(img)
+            qp3.scale(img.width() / w, img.height() / h)
+            qp3.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationOut)
+            outer = max(1.0, radius + feather * 0.5)
+            inner = max(0.0, (radius - feather * 0.5) / outer)
+            g = QRadialGradient(QPointF(w / 2.0, h / 2.0), outer)
+            g.setColorAt(0.0, QColor(0, 0, 0, 255))
+            g.setColorAt(min(0.999, inner), QColor(0, 0, 0, 255))
+            g.setColorAt(1.0, QColor(0, 0, 0, 0))
+            qp3.fillRect(QRectF(0, 0, w, h), QBrush(g))
+            qp3.end()
         mask = QPainterPath()
         mask.addRoundedRect(rect, 4, 4)
         painter.save()
@@ -738,6 +789,7 @@ class OverlayWindow(QWidget):
             self._pending_image_result = None
             self._image_result_transition_started = None
             self._region_overlay_started = None
+            self._reveal_started = None
 
     def mouseMoveEvent(self, event):
         pos = event.pos()
@@ -904,7 +956,11 @@ class OverlayWindow(QWidget):
         elif action_name == "search_web":
             EntityDetector.search_web(str(payload), engine=self.config.search_engine)
             self.close()
+        elif action_name == "close":
+            self.close()
         elif action_name in ("remove_bg", "blur_bg"):
+            self._processing_task = action_name
+            self._processing_source = payload
             self.processing_image = True
             self.processed_image = None
             self.processed_pixmap = None
@@ -977,7 +1033,9 @@ class OverlayWindow(QWidget):
         if not result_img:
             self._selection_animation_active = False
             self._region_overlay_started = None
+            self._reveal_started = None
         if result_img:
+            self._reveal_started = time.monotonic()
             ClipboardManager.copy_image(result_img)
             # Keep the capture frame open and composite the processed result
             # onto the background in place of the original crop.
@@ -992,7 +1050,11 @@ class OverlayWindow(QWidget):
             if self.processed_rect is not None:
                 r = self.processed_rect
                 r_tuple = (r.x(), r.y(), r.width(), r.height())
-                self.action_bar.show_for_image(result_img)
+                source = getattr(self, "_processing_source", None)
+                if source is not None:
+                    self.action_bar.show_for_result(result_img, source, task_name)
+                else:
+                    self.action_bar.show_for_image(result_img)
                 self.action_bar.reposition(r_tuple, self.width(), self.height())
         self.update()
 

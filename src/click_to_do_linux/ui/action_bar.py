@@ -257,6 +257,41 @@ class ActionBar(QFrame, AcrylicWidget):
 
         self._show_bar()
 
+    def show_for_result(self, result_image, source_image, task_name: str):
+        """Toolbar for a processed result: copy / save / retry / other quick action / close."""
+        self.clear_actions()
+
+        copy_btn = self._make_btn(t("copy_image"), "copy", "PrimaryAction", "#ffffff")
+        copy_btn.clicked.connect(lambda: self.action_triggered.emit("copy_image", result_image))
+        self.row_layout.addWidget(copy_btn)
+
+        save_btn = self._make_btn(t("save"), "save")
+        save_btn.clicked.connect(lambda: self.action_triggered.emit("save_image", result_image))
+        self.row_layout.addWidget(save_btn)
+
+        self._add_divider()
+
+        retry_btn = self._make_btn(t("retry"), "refresh")
+        retry_btn.clicked.connect(lambda: self._emit_async(retry_btn, t("cutting") if task_name == "remove_bg" else t("blurring"), task_name, source_image))
+        self.row_layout.addWidget(retry_btn)
+
+        if task_name == "remove_bg":
+            other, label, icon, busy = "blur_bg", t("blur_bg"), "blur", t("blurring")
+        else:
+            other, label, icon, busy = "remove_bg", t("cutout"), "cutout", t("cutting")
+        other_btn = self._make_btn(label, icon)
+        other_btn.clicked.connect(lambda: self._emit_async(other_btn, busy, other, source_image))
+        self.row_layout.addWidget(other_btn)
+
+        self._add_divider()
+
+        close_btn = self._make_btn(t("close_btn"), "close")
+        close_btn.setToolTip(t("close_result"))
+        close_btn.clicked.connect(lambda: self.action_triggered.emit("close", None))
+        self.row_layout.addWidget(close_btn)
+
+        self._show_bar()
+
     def _emit_async(self, btn: PillPushButton, busy_label: str, action: str, payload):
         btn.setText(f" {busy_label}")
         btn.setEnabled(False)

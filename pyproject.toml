@@ -1,6 +1,6 @@
 [project]
 name = "click-to-do-linux"
-version = "0.3.1"
+version = "0.4.0"
 description = "Personal Linux workbench with Pomodoro, wellness reminders, daily notes, tasks, and local AI screen tools"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]

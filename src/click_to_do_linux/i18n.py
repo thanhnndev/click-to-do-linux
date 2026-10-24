@@ -26,6 +26,9 @@ _STRINGS: dict[str, dict[str, str]] = {
     "redact": {"vi": "Che thông tin", "en": "Redact"},
     "copy_text": {"vi": "Sao chép chữ", "en": "Copy Text"},
     "save": {"vi": "Lưu ảnh", "en": "Save"},
+    "retry": {"vi": "Thử lại", "en": "Retry"},
+    "close_btn": {"vi": "Đóng", "en": "Close"},
+    "close_result": {"vi": "Đóng (Esc)", "en": "Close (Esc)"},
     "copy_qr": {"vi": "Sao chép mã QR", "en": "Copy QR"},
     # AI dialog
     "generating": {"vi": "Đang tạo...", "en": "Generating..."},
