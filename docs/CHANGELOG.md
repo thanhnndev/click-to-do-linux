@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5.0 (2026-10)
+
+### Text toolbar sub-menu
+- `ui/action_bar.py`: a labelled **More** button (chevron) opens a second row under the text toolbar. It replaces the old "⋯" menu; open/closed state is remembered between selections.
+- Sub-toolbar toggles (pill buttons, applied to the Copy button and Ctrl+C): **Remove line breaks** (moved from beside Copy, region selections only), **Remove spaces** (phone numbers, emails, codes) and **Remove accents** (Vietnamese-aware, `đ`/`Đ` included).
+- **Summarize** and **Rewrite** moved from the "⋯" menu into the sub-toolbar.
+- Image regions that contain text get the same sub-toolbar copy options (without Summarize/Rewrite).
+- `ai/entities.py`: new `strip_spaces()` and `strip_accents()`; `ui/icons.py`: `chevron_down`/`chevron_up`; new i18n keys (`more`, `more_options`, `strip_spaces`, `strip_accents`).
+- Tests: sub-toolbar transforms and visibility in `tests/test_text_actions.py`.
+
 ## 2026-10 (overlay border)
 
 ### Wave border (current)
