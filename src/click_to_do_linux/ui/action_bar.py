@@ -1,6 +1,6 @@
 """Rich, minimalist Windows 11 Click to Do Context Pill Bar with inline Ask AI."""
 
-from PyQt6.QtCore import QPoint, QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QRectF, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QPainter, QPainterPath
 from PyQt6.QtWidgets import (
     QFrame,
@@ -9,16 +9,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from qfluentwidgets import (
-    Action,
-    FluentIcon,
-    CheckBox,
     LineEdit,
     PillPushButton,
-    RoundMenu,
     TransparentToolButton,
 )
 from qfluentwidgets.components.material.acrylic_widget import AcrylicWidget
-from ..ai.entities import merge_text_lines
+from ..ai.entities import merge_text_lines, strip_accents, strip_spaces
 from ..i18n import t
 from ..config import load_config
 from .palette import theme_color
@@ -74,11 +70,42 @@ class ActionBar(QFrame, AcrylicWidget):
             lambda: self.action_triggered.emit("copy_text", self.text_for_copy(self._current_text))
         )
         copy_layout.addWidget(self.copy_text_btn)
-        self.merge_lines = CheckBox(t("merge_paragraph"), self.copy_text_group)
-        self.merge_lines.setToolTip(t("merge_paragraph_hint"))
-        copy_layout.addWidget(self.merge_lines)
-        self.merge_lines.hide()
         self.copy_text_group.hide()
+
+        # Sub-toolbar below the main row: copy transforms and extra AI actions.
+        self._sub_open = False
+        self._has_sub = False
+        self.sub_row = QWidget(self)
+        sub_layout = QHBoxLayout(self.sub_row)
+        sub_layout.setContentsMargins(2, 0, 2, 0)
+        sub_layout.setSpacing(4)
+        self.merge_lines = self._make_option("merge_paragraph", "text", sub_layout)
+        self.strip_spaces = self._make_option("strip_spaces", "close", sub_layout)
+        self.strip_accents = self._make_option("strip_accents", "translate", sub_layout)
+        self.merge_lines.hide()
+        self.ai_extras = QWidget(self.sub_row)
+        extras = QHBoxLayout(self.ai_extras)
+        extras.setContentsMargins(0, 0, 0, 0)
+        extras.setSpacing(4)
+        div = QFrame(self.ai_extras)
+        div.setObjectName("PillDivider")
+        extras.addWidget(div)
+        for label, icon, action in (("summarize", "sparkles", "ai_summarize"), ("rewrite", "refresh", "ai_rewrite")):
+            btn = self._make_btn(t(label), icon)
+            btn.clicked.connect(lambda _=False, act=action: self.action_triggered.emit(act, self._current_text))
+            extras.addWidget(btn)
+        sub_layout.addWidget(self.ai_extras)
+        self.ai_extras.hide()
+        self.sub_row.hide()
+        self.main_layout.addWidget(self.sub_row)
+
+    def _make_option(self, key: str, icon: str, layout) -> PillPushButton:
+        """Toggle pill: when pressed it is applied to every copy."""
+        btn = self._make_btn(t(key), icon)
+        btn.setCheckable(True)
+        btn.setToolTip(t(f"{key}_hint"))
+        layout.addWidget(btn)
+        return btn
 
     def acrylicClipPath(self):
         from PyQt6.QtCore import QRectF as _R
@@ -98,6 +125,8 @@ class ActionBar(QFrame, AcrylicWidget):
         self._current_text = ""
         self.ask_row.hide()
         self.merge_lines.hide()
+        self.ai_extras.hide()
+        self._has_sub = False
         self.ask_input.clear()
         while self.row_layout.count():
             item = self.row_layout.takeAt(0)
@@ -112,10 +141,34 @@ class ActionBar(QFrame, AcrylicWidget):
         self.copy_text_btn.setText(" " + label)
         self.copy_text_btn.show()
         self.merge_lines.setVisible(region)
+        self._has_sub = True
         self.row_layout.addWidget(self.copy_text_group)
 
+    def _add_options_toggle(self):
+        self._options_btn = self._make_btn(t("more"), "chevron_down")
+        self._options_btn.setToolTip(t("more_options"))
+        self._options_btn.clicked.connect(self._toggle_sub_row)
+        self._refresh_options_icon()
+        self.row_layout.addWidget(self._options_btn)
+
+    def _refresh_options_icon(self):
+        name = "chevron_up" if self._sub_open else "chevron_down"
+        self._options_btn.setIcon(get_icon(name, theme_color("#e4e4e7", self.theme), 14))
+
+    def _toggle_sub_row(self):
+        self._sub_open = not self._sub_open
+        self._refresh_options_icon()
+        self.sub_row.setVisible(self._sub_open)
+        self._resize_to_contents()
+
     def text_for_copy(self, text: str) -> str:
-        return merge_text_lines(text) if not self.merge_lines.isHidden() and self.merge_lines.isChecked() else text
+        if not self.merge_lines.isHidden() and self.merge_lines.isChecked():
+            text = merge_text_lines(text)
+        if self._has_sub and self.strip_spaces.isChecked():
+            text = strip_spaces(text)
+        if self._has_sub and self.strip_accents.isChecked():
+            text = strip_accents(text)
+        return text
 
     def show_for_link(self, url: str):
         self.clear_actions()
@@ -137,6 +190,7 @@ class ActionBar(QFrame, AcrylicWidget):
             self.reposition(*self._anchor)
 
     def _show_bar(self):
+        self.sub_row.setVisible(self._has_sub and self._sub_open)
         # New children of an already visible toolbar start hidden. Show them
         # before measuring, so switching selection never uses an empty layout.
         for i in range(self.row_layout.count()):
@@ -194,25 +248,11 @@ class ActionBar(QFrame, AcrylicWidget):
         search_btn.clicked.connect(lambda: self.action_triggered.emit("search_web", text))
         self.row_layout.addWidget(search_btn)
 
-        # 6. More AI Menu
-        more_btn = TransparentToolButton(self)
-        more_btn.setIcon(FluentIcon.MORE)
-        ai_menu = RoundMenu(parent=self)
-        for label, action in ((t("summarize"), "ai_summarize"), (t("rewrite"), "ai_rewrite")):
-            item = Action(label)
-            item.triggered.connect(lambda _checked=False, act=action: self.action_triggered.emit(act, text))
-            ai_menu.addAction(item)
-        # The menu is shown manually, a native menu button would add a second
-        # indicator arrow next to the Fluent "more" glyph.
-        more_btn.clicked.connect(lambda: self._popup_menu(ai_menu, more_btn))
-        self.row_layout.addWidget(more_btn)
+        # 6. Sub-toolbar toggle (copy options, summarize, rewrite)
+        self.ai_extras.show()
+        self._add_options_toggle()
 
         self._show_bar()
-
-    @staticmethod
-    def _popup_menu(menu: RoundMenu, button) -> None:
-        origin = button.mapToGlobal(QPoint(button.width() // 2, button.height() + 4))
-        menu.exec(origin)
 
     def _toggle_ask_input(self):
         if self.ask_row.isVisible():
@@ -254,6 +294,9 @@ class ActionBar(QFrame, AcrylicWidget):
         save_btn = self._make_btn(t("save"), "save")
         save_btn.clicked.connect(lambda: self.action_triggered.emit("save_image", crop_image))
         self.row_layout.addWidget(save_btn)
+
+        if text_inside:
+            self._add_options_toggle()
 
         self._show_bar()
 

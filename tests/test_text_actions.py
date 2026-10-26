@@ -278,6 +278,29 @@ class ActionBarTests(unittest.TestCase):
         self.bar.setParent(None)
         parent.close()
 
+    def test_sub_toolbar_options_transform_copied_text(self):
+        self.bar.show_for_text('Đường Lê Lợi\n090 123 456', region=True)
+        self.assertTrue(self.bar.sub_row.isHidden())
+        self.bar._toggle_sub_row()
+        self.assertFalse(self.bar.sub_row.isHidden())
+        self.bar.strip_accents.setChecked(True)
+        click_action(self.bar, t('copy'))
+        self.assertEqual(self.actions[-1], ('copy_text', 'Duong Le Loi\n090 123 456'))
+        self.bar.strip_spaces.setChecked(True)
+        click_action(self.bar, t('copy'))
+        self.assertEqual(self.actions[-1], ('copy_text', 'DuongLeLoi090123456'))
+        click_action(self.bar, t('rewrite'))
+        self.assertEqual(self.actions[-1][0], 'ai_rewrite')
+
+    def test_sub_toolbar_hidden_for_links_and_collapsed_state_survives(self):
+        self.bar.show_for_text('A line')
+        self.bar._toggle_sub_row()
+        self.bar.show_for_link('https://example.com')
+        self.assertTrue(self.bar.sub_row.isHidden())
+        self.bar.show_for_text('Another')
+        self.assertFalse(self.bar.sub_row.isHidden())
+        self.bar._toggle_sub_row()
+
     def test_plain_box_has_no_merge_checkbox(self):
         self.bar.show_for_text('A line')
         self.assertTrue(self.bar.merge_lines.isHidden())

@@ -2,6 +2,7 @@
 
 import re
 import subprocess
+import unicodedata
 from dataclasses import dataclass
 from typing import List, Tuple
 from urllib.parse import quote_plus, urlsplit
@@ -29,6 +30,18 @@ URL_REGEX = re.compile(
 def merge_text_lines(text: str) -> str:
     """Remove visual line wrapping while retaining spaces between words."""
     return " ".join(text.split())
+
+
+def strip_spaces(text: str) -> str:
+    """Remove every whitespace character, handy for phone numbers, emails and codes."""
+    return "".join(text.split())
+
+
+def strip_accents(text: str) -> str:
+    """Drop diacritics (Vietnamese included), keeping case: 'Đường Lê' -> 'Duong Le'."""
+    text = text.replace("đ", "d").replace("Đ", "D")
+    decomposed = unicodedata.normalize("NFD", text)
+    return unicodedata.normalize("NFC", "".join(c for c in decomposed if not unicodedata.combining(c)))
 
 
 @dataclass(frozen=True)
